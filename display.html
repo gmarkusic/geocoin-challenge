@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Challenge Scoreboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 1400px; margin: 30px auto; padding: 0 20px; background: #0f172a; color: #f8fafc; }
+    h2 { text-align: center; margin-bottom: 25px; color: #38bdf8; }
+    table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #334155; font-size: 0.85rem; vertical-align: middle; }
+    th { background: #334155; color: #f8fafc; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+    tr:last-child td { border-bottom: none; }
+    .status-bar { text-align: center; margin-bottom: 15px; font-size: 0.85rem; color: #94a3b8; }
+    .live-dot { height: 10px; width: 10px; background-color: #22c55e; border-radius: 50%; display: inline-block; margin-right: 6px; box-shadow: 0 0 8px #22c55e; }
+    .red-ball { color: #ef4444; font-weight: bold; }
+    .cat-title { font-weight: bold; color: #38bdf8; margin-bottom: 3px; }
+    .cat-metrics { color: #94a3b8; font-size: 0.8rem; }
+    
+    /* Variance Badge Styles */
+    .variance-badge {
+        display: inline-block;
+        padding: 0.2rem 0.4rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        border-radius: 4px;
+        text-align: center;
+    }
+    .variance-badge.positive {
+        background-color: rgba(34, 197, 94, 0.15);
+        color: #4ade80;
+    }
+    .variance-badge.negative {
+        background-color: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+    }
+    .variance-badge.neutral {
+        background-color: rgba(148, 163, 184, 0.15);
+        color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Annual Geocoin Challenge Scoreboard</h2>
+  <div class="status-bar">
+    <span class="live-dot"></span> Listening for real-time updates...
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Participant</th>
+        <th>Year</th>
+        <th>Pacing Variance</th>
+        <th>Mult</th>
+        <th>Attribute Goal</th>
+        <th>Size/Type Goal</th>
+        <th>D/T Goal</th>
+        <th>Timing Goal</th>
+      </tr>
+    </thead>
+    <tbody id="scoreboardBody">
+      <!-- Populated dynamically -->
+    </tbody>
+  </table>
+
+  <script>
+    const SUPABASE_URL = 'https://jnhchkwndzpsteisjsia.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaGNoa3duZHpwc3RlaXNqc2lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0ODEwOTksImV4cCI6MjEwOTA1NzA5OX0.wQYC256oD0JYEQXsTCWvr8q_8TBcO0EYvcGDMLlFaJc';
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const tableBody = document.getElementById('scoreboardBody');
+
+    async function fetchScoreboard() {
+      const { data, error } = await db
+        .from('v_live_scoreboard')
+        .select('*')
+        .order('id', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching scorecard:', error);
+        return;
+      }
+
+      tableBody.innerHTML = '';
+      if (data) {
+        data.forEach(row => addRow(row));
+      }
+    }
+
+    function renderHistoricalVariance(variancePct) {
+        if (variancePct === null || variancePct === undefined) {
+            return `<span class="variance-badge neutral">N/A</span>`;
+        }
+        const formattedVal = (variancePct > 0 ? `+${variancePct}` : variancePct) + '%';
+        let badgeClass = 'neutral';
+        if (variancePct > 0) {
+            badgeClass = 'positive';
+        } else if (variancePct < 0) {
+            badgeClass = 'negative';
+        }
+        return `<span class="variance-badge ${badgeClass}" title="Recent Avg vs 3-Year Historical Baseline">${formattedVal}</span>`;
+    }
+
+    function addRow(row) {
+      const tr = document.createElement('tr');
+      
+      let content = `
+        <td><strong>${escapeHtml(row.person_name)}</strong></td>
+        <td>${row.target_year}</td>
+        <td>${renderHistoricalVariance(row.historical_variance_pct)}</td>
+      `;
+
+      if (!row.p3_completed) {
+        content += `<td colspan="5" style="color: #94a3b8; font-style: italic;">Awaiting Day 1 starting counts...</td>`;
+      } else {
+        const attrStart = row.attr_target_value - row.attr_qty_needed;
+        const sizeStart = row.size_target_value - row.size_qty_needed;
+        const dtStart = row.dt_target_value - row.dt_qty_needed;
+        const timingStart = row.timing_target_value - row.timing_qty_needed;
+
+        content += `
+          <td>${row.is_red_ball ? '<span class="red-ball">RED BALL (10x)</span>' : row.effective_multiplier + 'x'}</td>
+          <td>
+            <div class="cat-title">${escapeHtml(row.attr_name || 'N/A')}</div>
+            <div class="cat-metrics">Start: ${attrStart} &bull; Needed: +${row.attr_qty_needed} &bull; <strong>Target: ${row.attr_target_value}</strong></div>
+          </td>
+          <td>
+            <div class="cat-title">${escapeHtml(row.size_name || 'N/A')}</div>
+            <div class="cat-metrics">Start: ${sizeStart} &bull; Needed: +${row.size_qty_needed} &bull; <strong>Target: ${row.size_target_value}</strong></div>
+          </td>
+          <td>
+            <div class="cat-title">${escapeHtml(row.dt_name || 'N/A')}</div>
+            <div class="cat-metrics">Start: ${dtStart} &bull; Needed: +${row.dt_qty_needed} &bull; <strong>Target: ${row.dt_target_value}</strong></div>
+          </td>
+          <td>
+            <div class="cat-title">${escapeHtml(row.timing_name || 'N/A')}</div>
+            <div class="cat-metrics">Start: ${timingStart} &bull; Needed: +${row.timing_qty_needed} &bull; <strong>Target: ${row.timing_target_value}</strong></div>
+          </td>
+        `;
+      }
+
+      tr.innerHTML = content;
+      tableBody.appendChild(tr);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // Subscribe to all changes on challenge_entries
+    db.channel('public:challenge_entries')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'challenge_entries' }, () => {
+        fetchScoreboard();
+      })
+      .subscribe();
+
+    fetchScoreboard();
+  </script>
+</body>
+</html>
