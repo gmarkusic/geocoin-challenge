@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Station 2: Lottery & Multiplier</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 30px auto; padding: 20px; background: #0f172a; color: #f8fafc; }
+    h2 { color: #38bdf8; text-align: center; }
+    form { background: #1e293b; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: 500; }
+    input, select { width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #334155; background: #0f172a; color: #f8fafc; box-sizing: border-box; }
+    .checkbox-group { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+    .checkbox-group input { width: auto; }
+    button { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #475569; cursor: not-allowed; }
+    .status-bar { text-align: center; margin-bottom: 15px; font-size: 0.85rem; color: #94a3b8; }
+    .live-dot { height: 10px; width: 10px; background-color: #22c55e; border-radius: 50%; display: inline-block; margin-right: 6px; box-shadow: 0 0 8px #22c55e; }
+    #message { margin-top: 15px; text-align: center; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <h2>Station 2: Lottery & Categories</h2>
+  <div class="status-bar">
+    <span class="live-dot"></span> Listening for new participants from Station 1...
+  </div>
+
+  <form id="p2Form">
+    <div class="form-group">
+      <label>Next Participant in Queue:</label>
+      <select id="entrySelect" required><option value="">-- Waiting for entries --</option></select>
+    </div>
+    <div class="form-group">
+      <label>Attribute: [Range: 1–108]</label>
+      <input type="number" id="attrId" min="1" max="108" required placeholder="Enter ID (1 - 108)">
+    </div>
+    <div class="form-group">
+      <label>Size/Type: [Range: 1–11]</label>
+      <input type="number" id="sizeId" min="1" max="11" required placeholder="Enter ID (1 - 11)">
+    </div>
+    <div class="form-group">
+      <label>D/T: [Range: 1–99]</label>
+      <input type="number" id="dtId" min="1" max="99" required placeholder="Enter ID (1 - 99)">
+    </div>
+    <div class="form-group">
+      <label>Timing: [Range: 1–57]</label>
+      <input type="number" id="timingId" min="1" max="57" required placeholder="Enter ID (1 - 57)">
+    </div>
+    <div class="form-group">
+      <label>Manual Multiplier (1-10):</label>
+      <input type="number" id="multiplier" min="1" max="10" value="1">
+    </div>
+    <div class="checkbox-group">
+      <input type="checkbox" id="isRedBall">
+      <label for="isRedBall" style="color: #ef4444; font-weight: bold;">Red Ball Pulled? (Locks 10x multiplier & makes goals optional)</label>
+    </div>
+    <button type="submit" id="submitBtn">Update Lottery Results</button>
+  </form>
+  <div id="message"></div>
+
+  <script>
+    const SUPABASE_URL = 'https://jnhchkwndzpsteisjsia.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaGNoa3duZHpwc3RlaXNqc2lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0ODEwOTksImV4cCI6MjEwOTA1NzA5OX0.wQYC256oD0JYEQXsTCWvr8q_8TBcO0EYvcGDMLlFaJc';
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function loadEntries() {
+      const select = document.getElementById('entrySelect');
+      const msg = document.getElementById('message');
+      const submitBtn = document.getElementById('submitBtn');
+      
+      const currentSelected = select.value;
+      select.innerHTML = '';
+
+      const { data, error } = await db
+        .from('challenge_entries')
+        .select('id, person_name, target_year')
+        .is('attribute_goal_id', null)
+        .order('id', { ascending: true });
+
+      if (error) {
+        console.error('Error loading entries:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        data.forEach(row => {
+          const opt = document.createElement('option');
+          opt.value = row.id;
+          opt.textContent = `${row.person_name} (${row.target_year})`;
+          select.appendChild(opt);
+        });
+        
+        if (currentSelected && data.some(row => row.id == currentSelected)) {
+          select.value = currentSelected;
+        } else {
+          select.value = data[0].id;
+        }
+
+        submitBtn.disabled = false;
+        if (msg.textContent.includes('All pending') || msg.textContent.includes('Waiting for Station 1')) {
+          msg.textContent = '';
+        }
+      } else {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '-- No Pending Entries Found --';
+        select.appendChild(opt);
+        
+        submitBtn.disabled = true;
+        msg.style.color = '#38bdf8';
+        msg.textContent = '⏳ Waiting for Station 1 to register new participants...';
+      }
+    }
+
+    document.getElementById('p2Form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('entrySelect').value;
+      const msg = document.getElementById('message');
+
+      if (!id) {
+        msg.style.color = '#ef4444';
+        msg.textContent = 'No pending participant selected.';
+        return;
+      }
+
+      const attrVal = parseInt(document.getElementById('attrId').value);
+      const sizeVal = parseInt(document.getElementById('sizeId').value);
+      const dtVal = parseInt(document.getElementById('dtId').value);
+      const timingVal = parseInt(document.getElementById('timingId').value);
+
+      // Validation Checks
+      if (attrVal < 1 || attrVal > 108) {
+        msg.style.color = '#ef4444';
+        msg.textContent = '⚠️ Attribute ID must be between 1 and 108.';
+        return;
+      }
+      if (sizeVal < 1 || sizeVal > 11) {
+        msg.style.color = '#ef4444';
+        msg.textContent = '⚠️ Size/Type ID must be between 1 and 11.';
+        return;
+      }
+      if (dtVal < 1 || dtVal > 99) {
+        msg.style.color = '#ef4444';
+        msg.textContent = '⚠️ D/T ID must be between 1 and 99.';
+        return;
+      }
+      if (timingVal < 1 || timingVal > 57) {
+        msg.style.color = '#ef4444';
+        msg.textContent = '⚠️ Timing ID must be between 1 and 57.';
+        return;
+      }
+
+      const { error } = await db.from('challenge_entries').update({
+        attribute_goal_id: attrVal,
+        size_type_goal_id: sizeVal,
+        dt_goal_id: dtVal,
+        timing_goal_id: timingVal,
+        manual_multiplier: parseInt(document.getElementById('multiplier').value),
+        is_red_ball: document.getElementById('isRedBall').checked
+      }).eq('id', id);
+
+      if (error) {
+        msg.style.color = '#ef4444';
+        msg.textContent = 'Error: ' + error.message;
+      } else {
+        msg.style.color = '#22c55e';
+        msg.textContent = 'Lottery results saved! Loading next participant...';
+        
+        // Reset inputs
+        document.getElementById('attrId').value = '';
+        document.getElementById('sizeId').value = '';
+        document.getElementById('dtId').value = '';
+        document.getElementById('timingId').value = '';
+        document.getElementById('multiplier').value = '1';
+        document.getElementById('isRedBall').checked = false;
+
+        loadEntries();
+
+        // Set focus back to the attribute field for the next entry
+        document.getElementById('attrId').focus();
+      }
+    });
+
+    db.channel('public:challenge_entries_p2')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'challenge_entries' }, () => {
+        loadEntries();
+      })
+      .subscribe();
+
+    loadEntries();
+  </script>
+</body>
+</html>

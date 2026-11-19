@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Station 1: Participant & Baseline</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 30px auto; padding: 20px; background: #0f172a; color: #f8fafc; }
+    h2 { color: #38bdf8; text-align: center; }
+    form { background: #1e293b; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: 500; }
+    input, select { width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #334155; background: #0f172a; color: #f8fafc; box-sizing: border-box; }
+    select { cursor: pointer; }
+    
+    .input-with-button { display: flex; gap: 8px; }
+    .input-with-button input { flex: 1; }
+    .verify-btn { width: auto; padding: 10px 14px; background: #334155; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; font-weight: 600; cursor: pointer; white-space: nowrap; margin-top: 0; }
+    .verify-btn:hover { background: #38bdf8; color: #0f172a; }
+
+    #verificationStatus { font-size: 0.8rem; margin-top: 4px; font-weight: bold; }
+    .status-unverified { color: #f59e0b; }
+    .status-verified { color: #22c55e; }
+
+    button[type="submit"] { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+    button[type="submit"]:hover { background: #1d4ed8; }
+    #message { margin-top: 15px; text-align: center; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <h2>Station 1: Entry Setup</h2>
+  <form id="p1Form">
+    <div class="form-group">
+      <label for="personName">Geocachers Name:</label>
+      <div class="input-with-button">
+        <input type="text" id="personName" required placeholder="e.g. John Doe">
+        <button type="button" class="verify-btn" onclick="verifyGeocacher()">Project-GC Stats 🔍</button>
+      </div>
+      <div id="verificationStatus" class="status-unverified">⚠️ Name must be verified via Project-GC before saving.</div>
+    </div>
+    <div class="form-group">
+      <label for="targetYear">Target Coin Year:</label>
+      <select id="targetYear" required>
+        <option value="">Loading available coins...</option>
+      </select>
+    </div>
+    <hr style="border: 0; border-top: 1px solid #334155; margin: 20px 0;">
+    <div class="form-group">
+      <label for="finds1">2026 Total Finds:</label>
+      <input type="number" id="finds1" placeholder="e.g. 1200">
+    </div>
+    <div class="form-group">
+      <label for="finds2">2025 Total Finds:</label>
+      <input type="number" id="finds2" placeholder="e.g. 1500">
+    </div>
+    <div class="form-group">
+      <label for="finds3">2024 Total Finds:</label>
+      <input type="number" id="finds3" placeholder="e.g. 1100">
+    </div>
+    <button type="submit">Save Station 1 Data</button>
+  </form>
+  <div id="message"></div>
+
+  <script>
+    const SUPABASE_URL = 'https://jnhchkwndzpsteisjsia.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaGNoa3duZHpwc3RlaXNqc2lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0ODEwOTksImV4cCI6MjEwOTA1NzA5OX0.wQYC256oD0JYEQXsTCWvr8q_8TBcO0EYvcGDMLlFaJc';
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let lastVerifiedName = '';
+
+    const nameInput = document.getElementById('personName');
+    const statusDiv = document.getElementById('verificationStatus');
+    const targetYearSelect = document.getElementById('targetYear');
+
+    // Fetch available target years from the coin_inventory table where is_available is true
+    async function loadTargetYears() {
+      const { data, error } = await db
+        .from('coin_inventory') 
+        .select('target_year, total_available')
+        .eq('is_available', true)
+        .order('target_year', { ascending: false });
+
+      targetYearSelect.innerHTML = '';
+
+      if (error) {
+        console.error('Error loading coin inventory:', error);
+        targetYearSelect.innerHTML = '<option value="">Error loading available coins</option>';
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        targetYearSelect.innerHTML = '<option value="">No coin years currently available</option>';
+        return;
+      }
+
+      data.forEach(row => {
+        const option = document.createElement('option');
+        option.value = row.target_year;
+        option.textContent = `${row.target_year} Coin (${row.total_available} available)`;
+        targetYearSelect.appendChild(option);
+      });
+    }
+
+    nameInput.addEventListener('input', () => {
+      const currentName = nameInput.value.trim();
+      if (currentName !== lastVerifiedName) {
+        statusDiv.textContent = '⚠️ Name changed. Please re-verify on Project-GC.';
+        statusDiv.className = 'status-unverified';
+      } else {
+        statusDiv.textContent = '✓ Name verified on Project-GC.';
+        statusDiv.className = 'status-verified';
+      }
+    });
+
+    function verifyGeocacher() {
+      const name = nameInput.value.trim();
+      const msg = document.getElementById('message');
+      
+      if (!name) {
+        msg.style.color = '#ef4444';
+        msg.textContent = 'Please enter a Geocacher Name first to verify.';
+        return;
+      }
+      
+      msg.textContent = '';
+      lastVerifiedName = name;
+      
+      statusDiv.textContent = '✓ Name verified on Project-GC.';
+      statusDiv.className = 'status-verified';
+
+      const profileUrl = `https://project-gc.com/ProfileStats/${encodeURIComponent(name)}`;
+      window.open(profileUrl, 'ProjectGCWindow', 'width=1100,height=850,scrollbars=yes,resizable=yes');
+    }
+
+    document.getElementById('p1Form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('message');
+      msg.textContent = '';
+      
+      const currentName = nameInput.value.trim();
+
+      if (lastVerifiedName === '' || currentName !== lastVerifiedName) {
+        msg.style.color = '#ef4444';
+        msg.textContent = '⚠️ You must click "Project-GC Stats 🔍" to verify this exact name before saving!';
+        return;
+      }
+      
+      const { error } = await db.from('challenge_entries').insert([{
+        person_name: currentName,
+        target_year: parseInt(targetYearSelect.value),
+        finds_recent_1: parseInt(document.getElementById('finds1').value) || 0,
+        finds_recent_2: parseInt(document.getElementById('finds2').value) || 0,
+        finds_recent_3: parseInt(document.getElementById('finds3').value) || 0
+      }]);
+
+      if (error) {
+        msg.style.color = '#ef4444';
+        if (error.code === '23505' || error.message.includes('unique_cacher_per_year')) {
+          msg.textContent = '⚠️ This participant already has an entry registered for that target year!';
+        } else {
+          msg.textContent = 'Error: ' + error.message;
+        }
+      } else {
+        msg.style.color = '#22c55e';
+        msg.textContent = 'Successfully saved participant baseline!';
+        document.getElementById('p1Form').reset();
+        lastVerifiedName = '';
+        statusDiv.textContent = '⚠️ Name must be verified via Project-GC before saving.';
+        statusDiv.className = 'status-unverified';
+        loadTargetYears(); // Reload the dropdown options
+
+        // Return focus to the Geocacher Name input field for the next entry
+        nameInput.focus();
+      }
+    });
+
+    // Load the dropdown choices as soon as the page loads
+    loadTargetYears();
+  </script>
+</body>
+</html>

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Station 3: Day 1 Starting Counts</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 30px auto; padding: 20px; background: #0f172a; color: #f8fafc; }
+    h2 { color: #38bdf8; text-align: center; }
+    form { background: #1e293b; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: 500; }
+    .desc-tag { color: #38bdf8; font-weight: 600; font-size: 0.9rem; margin-top: 2px; display: block; }
+    input, select { width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #334155; background: #0f172a; color: #f8fafc; box-sizing: border-box; }
+    
+    /* Participant selection row with Get Stats button */
+    .input-with-button { display: flex; gap: 8px; align-items: center; }
+    .input-with-button select { flex: 1; }
+    .verify-btn { width: auto; padding: 10px 14px; background: #334155; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; font-weight: 600; cursor: pointer; white-space: nowrap; margin-top: 0; }
+    .verify-btn:hover { background: #38bdf8; color: #0f172a; }
+
+    #verificationStatus { font-size: 0.8rem; margin-top: 4px; font-weight: bold; }
+    .status-unverified { color: #f59e0b; }
+    .status-verified { color: #22c55e; }
+
+    /* Attribute layout with live image preview */
+    .attribute-container { display: flex; gap: 12px; align-items: center; }
+    .attribute-inputs { flex: 1; }
+    .attribute-preview { width: 50px; height: 50px; background: #0f172a; border: 1px dashed #334155; border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+    .attribute-preview img { width: 100%; height: 100%; object-fit: contain; display: none; }
+    .attribute-preview span { font-size: 0.60rem; color: #64748b; text-align: center; padding: 2px; }
+
+    button[type="submit"] { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+    button[type="submit"]:hover { background: #1d4ed8; }
+    button[type="submit"]:disabled { background: #475569; cursor: not-allowed; }
+    
+    .status-bar { text-align: center; margin-bottom: 15px; font-size: 0.85rem; color: #94a3b8; }
+    .live-dot { height: 10px; width: 10px; background-color: #22c55e; border-radius: 50%; display: inline-block; margin-right: 6px; box-shadow: 0 0 8px #22c55e; }
+    #message { margin-top: 15px; text-align: center; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <h2>Station 3: Finalize Day 1 Counts</h2>
+  <div class="status-bar">
+    <span class="live-dot"></span> Listening for lottery-assigned entries...
+  </div>
+
+  <form id="p3Form">
+    <div class="form-group">
+      <label for="entrySelect">Next Participant in Queue:</label>
+      <div class="input-with-button">
+        <select id="entrySelect" required onchange="onEntrySelected()">
+          <option value="">-- Waiting for entries --</option>
+        </select>
+        <button type="button" class="verify-btn" onclick="verifyGeocacherStats()">Get Stats 🔍</button>
+      </div>
+      <div id="verificationStatus" class="status-verified">✓ Queue synced with live database.</div>
+    </div>
+
+    <hr style="border: 0; border-top: 1px solid #334155; margin: 20px 0;">
+
+    <!-- Size/Type Goal -->
+    <div class="form-group">
+      <label id="lblSize">Starting Count - Size/Type Goal:</label>
+      <span class="desc-tag" id="descSize"></span>
+      <input type="number" id="startSize" placeholder="e.g. 450" required style="margin-top: 8px;">
+    </div>
+    
+    <!-- D/T Goal -->
+    <div class="form-group">
+      <label id="lblDt">Starting Count - D/T Goal:</label>
+      <span class="desc-tag" id="descDt"></span>
+      <input type="number" id="startDt" placeholder="e.g. 80" required style="margin-top: 8px;">
+    </div>
+    
+    <!-- Timing Goal -->
+    <div class="form-group">
+      <label id="lblTiming">Starting Count - Timing Goal:</label>
+      <span class="desc-tag" id="descTiming"></span>
+      <input type="number" id="startTiming" placeholder="e.g. 12" required style="margin-top: 8px;">
+    </div>
+
+    <!-- Attribute Starting Count with Image Preview (Listed Last) -->
+    <div class="form-group">
+      <label id="lblAttr">Starting Count - Attribute Goal:</label>
+      <span class="desc-tag" id="descAttr"></span>
+      <div class="attribute-container" style="margin-top: 8px;">
+        <div class="attribute-inputs">
+          <input type="number" id="startAttr" placeholder="e.g. 150" required>
+        </div>
+        <div class="attribute-preview" id="attrPreviewBox">
+          <img id="attrImg" src="" alt="Attribute Icon">
+          <span id="attrPlaceholder">No Image</span>
+        </div>
+      </div>
+    </div>
+    
+    <button type="submit" id="submitBtn">Finalize Counts & Unlock Scoreboard</button>
+  </form>
+  <div id="message"></div>
+
+  <script>
+    const SUPABASE_URL = 'https://jnhchkwndzpsteisjsia.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaGNoa3duZHpwc3RlaXNqc2lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0ODEwOTksImV4cCI6MjEwOTA1NzA5OX0.wQYC256oD0JYEQXsTCWvr8q_8TBcO0EYvcGDMLlFaJc';
+    
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let activeEntriesCache = [];
+    const statusDiv = document.getElementById('verificationStatus');
+
+    async function loadEntries() {
+      const select = document.getElementById('entrySelect');
+      const msg = document.getElementById('message');
+      const submitBtn = document.getElementById('submitBtn');
+      
+      const currentSelected = select.value;
+      select.innerHTML = '';
+
+      const { data, error } = await db
+        .from('challenge_entries')
+        .select('id, person_name, target_year, attribute_goal_id, size_type_goal_id, dt_goal_id, timing_goal_id')
+        .not('attribute_goal_id', 'is', null)
+        .or('p3_completed.eq.false,p3_completed.is.null')
+        .order('id', { ascending: true });
+
+      if (error) {
+        console.error('Error loading entries:', error);
+        statusDiv.textContent = '⚠️ Error loading queue from database.';
+        statusDiv.className = 'status-unverified';
+        return;
+      }
+
+      activeEntriesCache = data || [];
+
+      if (activeEntriesCache.length > 0) {
+        activeEntriesCache.forEach(row => {
+          const opt = document.createElement('option');
+          opt.value = row.id;
+          opt.textContent = `${row.person_name} (${row.target_year})`;
+          select.appendChild(opt);
+        });
+        
+        if (currentSelected && activeEntriesCache.some(row => row.id == currentSelected)) {
+          select.value = currentSelected;
+        } else {
+          select.value = activeEntriesCache[0].id;
+        }
+
+        submitBtn.disabled = false;
+        statusDiv.textContent = `✓ Queue active (${activeEntriesCache.length} pending participant${activeEntriesCache.length > 1 ? 's' : ''}).`;
+        statusDiv.className = 'status-verified';
+
+        if (msg.textContent.includes('All entries') || msg.textContent.includes('Waiting for Station 2')) {
+          msg.textContent = '';
+        }
+      } else {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '-- No Pending Entries Found --';
+        select.appendChild(opt);
+        
+        submitBtn.disabled = true;
+        statusDiv.textContent = '⏳ Waiting for Station 2 assignments...';
+        statusDiv.className = 'status-unverified';
+        msg.style.color = '#38bdf8';
+        msg.textContent = '⏳ Waiting for Station 2 to complete lottery assignments...';
+        clearGoalDescriptions();
+      }
+
+      onEntrySelected();
+    }
+
+    function verifyGeocacherStats() {
+      const selectId = document.getElementById('entrySelect').value;
+      const msg = document.getElementById('message');
+
+      if (!selectId) {
+        msg.style.color = '#ef4444';
+        msg.textContent = 'Please select a participant from the queue first.';
+        return;
+      }
+
+      const entry = activeEntriesCache.find(row => row.id == selectId);
+      if (!entry || !entry.person_name) {
+        msg.style.color = '#ef4444';
+        msg.textContent = 'Could not resolve participant name for the selected entry.';
+        return;
+      }
+
+      msg.textContent = '';
+      const profileUrl = `https://project-gc.com/ProfileStats/${encodeURIComponent(entry.person_name.trim())}`;
+      window.open(profileUrl, 'ProjectGCWindow', 'width=1100,height=850,scrollbars=yes,resizable=yes');
+    }
+
+    async function onEntrySelected() {
+      const selectId = document.getElementById('entrySelect').value;
+      if (!selectId) {
+        clearGoalDescriptions();
+        return;
+      }
+
+      const entry = activeEntriesCache.find(row => row.id == selectId);
+      if (!entry) {
+        clearGoalDescriptions();
+        return;
+      }
+
+      try {
+        const [attrRes, sizeRes, dtRes, timingRes] = await Promise.all([
+          entry.attribute_goal_id ? db.from('ref_attributes').select('item_name, image_url').eq('id', entry.attribute_goal_id).maybeSingle() : Promise.resolve({ data: null }),
+          entry.size_type_goal_id ? db.from('ref_size_type').select('item_name').eq('id', entry.size_type_goal_id).maybeSingle() : Promise.resolve({ data: null }),
+          entry.dt_goal_id ? db.from('ref_dt_ratings').select('item_name').eq('id', entry.dt_goal_id).maybeSingle() : Promise.resolve({ data: null }),
+          entry.timing_goal_id ? db.from('ref_timing').select('item_name').eq('id', entry.timing_goal_id).maybeSingle() : Promise.resolve({ data: null })
+        ]);
+
+        document.getElementById('descAttr').textContent = attrRes.data?.item_name ? attrRes.data.item_name : '';
+        document.getElementById('descSize').textContent = sizeRes.data?.item_name ? sizeRes.data.item_name : '';
+        document.getElementById('descDt').textContent = dtRes.data?.item_name ? dtRes.data.item_name : '';
+        document.getElementById('descTiming').textContent = timingRes.data?.item_name ? timingRes.data.item_name : '';
+
+        const imgElem = document.getElementById('attrImg');
+        const placeholderElem = document.getElementById('attrPlaceholder');
+
+        if (attrRes.data && attrRes.data.image_url) {
+          let rawUrl = attrRes.data.image_url;
+          let finalUrl = rawUrl;
+
+          // If the image_url is a relative storage path rather than an absolute URL, resolve it
+          if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+            const { data: publicUrlData } = db.storage.from('attributes').getPublicUrl(rawUrl);
+            finalUrl = publicUrlData.publicUrl;
+          }
+
+          imgElem.onerror = () => {
+            console.warn("Failed to load image from ref_attributes at:", finalUrl);
+            imgElem.style.display = 'none';
+            placeholderElem.style.display = 'block';
+          };
+
+          imgElem.src = finalUrl;
+          imgElem.style.display = 'block';
+          placeholderElem.style.display = 'none';
+        } else {
+          clearAttributePreview();
+        }
+      } catch (err) {
+        console.warn("Lookup error:", err);
+      }
+    }
+
+    function clearAttributePreview() {
+      const imgElem = document.getElementById('attrImg');
+      const placeholderElem = document.getElementById('attrPlaceholder');
+      imgElem.style.display = 'none';
+      imgElem.src = '';
+      placeholderElem.style.display = 'block';
+    }
+
+    function clearGoalDescriptions() {
+      document.getElementById('descAttr').textContent = '';
+      document.getElementById('descSize').textContent = '';
+      document.getElementById('descDt').textContent = '';
+      document.getElementById('descTiming').textContent = '';
+      clearAttributePreview();
+    }
+
+    document.getElementById('p3Form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('entrySelect').value;
+      const msg = document.getElementById('message');
+
+      if (!id) {
+        msg.style.color = '#ef4444';
+        msg.textContent = 'No pending participant selected.';
+        return;
+      }
+
+      const { error } = await db.from('challenge_entries').update({
+        start_count_attr: parseInt(document.getElementById('startAttr').value) || 0,
+        start_count_size: parseInt(document.getElementById('startSize').value) || 0,
+        start_count_dt: parseInt(document.getElementById('startDt').value) || 0,
+        start_count_timing: parseInt(document.getElementById('startTiming').value) || 0,
+        p3_completed: true
+      }).eq('id', id);
+
+      if (error) {
+        msg.style.color = '#ef4444';
+        msg.textContent = 'Error: ' + error.message;
+      } else {
+        msg.style.color = '#22c55e';
+        msg.textContent = 'Counts finalized! Scoreboard unlocked for participant. Loading next...';
+        
+        document.getElementById('startAttr').value = '';
+        document.getElementById('startSize').value = '';
+        document.getElementById('startDt').value = '';
+        document.getElementById('startTiming').value = '';
+        clearGoalDescriptions();
+
+        loadEntries();
+      }
+    });
+
+    db.channel('public:challenge_entries_p3')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'challenge_entries' }, () => {
+        loadEntries();
+      })
+      .subscribe();
+
+    loadEntries();
+  </script>
+</body>
+</html>
