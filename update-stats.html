@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Geocoin Challenge - Find Logging Panel</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 30px auto; padding: 0 20px; background: #0f172a; color: #f8fafc; }
+    h2 { text-align: center; color: #38bdf8; margin-bottom: 20px; }
+    .card { background: #1e293b; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #334155; }
+    .queue-info { text-align: center; font-size: 0.9rem; color: #94a3b8; margin-bottom: 20px; }
+    label { display: block; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 6px; }
+    input { width: 100%; padding: 10px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; font-size: 1rem; box-sizing: border-box; }
+    input:focus { outline: none; border-color: #38bdf8; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .category-box { background: #0f172a; padding: 15px; border-radius: 6px; border: 1px solid #334155; transition: border-color 0.2s, background-color 0.2s; }
+    .category-box.completed { background: rgba(34, 197, 94, 0.1); border-color: #22c55e; }
+    .cat-title { font-weight: bold; color: #38bdf8; font-size: 0.95rem; margin-bottom: 4px; }
+    .category-box.completed .cat-title { color: #4ade80; }
+    .target-info { font-size: 0.8rem; color: #94a3b8; margin-bottom: 10px; }
+    button { width: 100%; background: #0284c7; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; font-size: 1rem; cursor: pointer; transition: background 0.2s; margin-top: 20px; }
+    button:hover { background: #0369a1; }
+    
+    /* Project-GC Button Styling */
+    .secondary-btn { background: #334155; color: #f8fafc; border: 1px solid #475569; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.2s; width: auto; margin-top: 0; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+    .secondary-btn:hover { background: #475569; }
+
+    .form-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 15px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+    .participant-title { color: #f8fafc; margin: 0; font-size: 1.2rem; }
+
+    .status-msg { margin-top: 15px; text-align: center; font-size: 0.9rem; font-weight: 600; }
+    .status-success { color: #4ade80; }
+    .status-error { color: #f87171; }
+    .empty-queue { text-align: center; padding: 40px; color: #94a3b8; font-size: 1.1rem; }
+    .section-divider { grid-column: span 2; border-top: 1px solid #334155; margin: 5px 0; padding-top: 10px; color: #38bdf8; font-weight: bold; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  </style>
+</head>
+<body>
+
+  <h2>Participant Progress Logging</h2>
+
+  <div class="card">
+    <div class="queue-info" id="queueInfo">Loading queue status...</div>
+
+    <!-- Dynamic Entry Form -->
+    <div id="entryForm" style="display: none;">
+      
+      <!-- Participant Header & Project-GC Button -->
+      <div class="form-header">
+        <h3 id="participantTitle" class="participant-title"></h3>
+        <button type="button" class="secondary-btn" onclick="openProjectGC()">
+          🔗 Open Project-GC ↗
+        </button>
+      </div>
+      
+      <div class="grid">
+        <!-- Find Totals Section (Top) -->
+        <div class="section-divider">Find Totals & Activity</div>
+
+        <!-- Current Find Count -->
+        <div class="category-box" id="boxCurrentFind">
+          <div class="cat-title">Current Find Count</div>
+          <div class="target-info">Total finds logged</div>
+          <label for="countCurrentFind">Find Count</label>
+          <input type="number" id="countCurrentFind" min="0" placeholder="0">
+        </div>
+
+        <!-- Lab Find Count -->
+        <div class="category-box" id="boxLabFind">
+          <div class="cat-title">Lab Find Count</div>
+          <div class="target-info">Adventure Lab finds logged</div>
+          <label for="countLabFind">Lab Count</label>
+          <input type="number" id="countLabFind" min="0" placeholder="0">
+        </div>
+
+        <!-- Goal Progress Section -->
+        <div class="section-divider">Challenge Goal Progress</div>
+
+        <!-- Size/Type Entry -->
+        <div class="category-box" id="boxSize">
+          <div class="cat-title" id="sizeTitle">Size/Type Goal</div>
+          <div class="target-info" id="sizeTargetInfo">--</div>
+          <label for="countSize">Current Progress Count</label>
+          <input type="number" id="countSize" min="0" placeholder="0" oninput="checkCompletion()">
+        </div>
+
+        <!-- D/T Entry -->
+        <div class="category-box" id="boxDt">
+          <div class="cat-title" id="dtTitle">D/T Goal</div>
+          <div class="target-info" id="dtTargetInfo">--</div>
+          <label for="countDt">Current Progress Count</label>
+          <input type="number" id="countDt" min="0" placeholder="0" oninput="checkCompletion()">
+        </div>
+
+        <!-- Timing Entry -->
+        <div class="category-box" id="boxTiming">
+          <div class="cat-title" id="timingTitle">Timing Goal</div>
+          <div class="target-info" id="timingTargetInfo">--</div>
+          <label for="countTiming">Current Progress Count</label>
+          <input type="number" id="countTiming" min="0" placeholder="0" oninput="checkCompletion()">
+        </div>
+
+        <!-- Attribute Entry -->
+        <div class="category-box" id="boxAttr">
+          <div class="cat-title" id="attrTitle">Attribute Goal</div>
+          <div class="target-info" id="attrTargetInfo">--</div>
+          <label for="countAttr">Current Progress Count</label>
+          <input type="number" id="countAttr" min="0" placeholder="0" oninput="checkCompletion()">
+        </div>
+      </div>
+
+      <button onclick="saveAndNext()">Save & Next Participant ➡️</button>
+      <div id="statusMsg" class="status-msg"></div>
+    </div>
+
+    <div id="emptyQueueMsg" class="empty-queue" style="display: none;">
+      🎉 All participant progress for today has been logged!
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jnhchkwndzpsteisjsia.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaGNoa3duZHpwc3RlaXNqc2lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0ODEwOTksImV4cCI6MjEwOTA1NzA5OX0.wQYC256oD0JYEQXsTCWvr8q_8TBcO0EYvcGDMLlFaJc';
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let pendingQueue = [];
+    let currentParticipant = null;
+
+    async function loadQueue() {
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      const { data, error } = await db
+        .from('v_live_scoreboard')
+        .select('*')
+        .eq('p3_completed', true)
+        .order('person_name', { ascending: true });
+
+      if (error) {
+        console.error('Error loading queue:', error);
+        return;
+      }
+
+      pendingQueue = (data || []).filter(p => {
+        const lastUpdatedDate = p.updated_at ? p.updated_at.split('T')[0] : null;
+        const needsUpdateToday = lastUpdatedDate !== todayStr;
+
+        const sizeDone = (p.current_count_size || 0) >= (p.size_target_value || 0);
+        const dtDone = (p.current_count_dt || 0) >= (p.dt_target_value || 0);
+        const timingDone = (p.current_count_timing || 0) >= (p.timing_target_value || 0);
+        const attrDone = (p.current_count_attr || 0) >= (p.attr_target_value || 0);
+
+        const allGoalsCompleted = sizeDone && dtDone && timingDone && attrDone;
+
+        return needsUpdateToday && !allGoalsCompleted;
+      });
+
+      updateQueueDisplay();
+    }
+
+    function updateQueueDisplay() {
+      const queueInfo = document.getElementById('queueInfo');
+      const entryForm = document.getElementById('entryForm');
+      const emptyMsg = document.getElementById('emptyQueueMsg');
+
+      if (pendingQueue.length === 0) {
+        queueInfo.textContent = 'Queue Status: All caught up for today!';
+        entryForm.style.display = 'none';
+        emptyMsg.style.display = 'block';
+        currentParticipant = null;
+        return;
+      }
+
+      emptyMsg.style.display = 'none';
+      entryForm.style.display = 'block';
+      queueInfo.textContent = `Pending updates for today: ${pendingQueue.length} participant(s) remaining`;
+
+      currentParticipant = pendingQueue[0];
+      populateForm(currentParticipant);
+
+      // Focus the Current Find Count input field first
+      const findInput = document.getElementById('countCurrentFind');
+      findInput.focus();
+      findInput.select();
+    }
+
+    function populateForm(p) {
+      document.getElementById('participantTitle').textContent = `${p.person_name} (${p.target_year})`;
+      document.getElementById('statusMsg').textContent = '';
+
+      // Find Totals
+      document.getElementById('countCurrentFind').value = p.current_find_count || 0;
+      document.getElementById('countLabFind').value = p.lab_find_count || 0;
+
+      // Size/Type
+      document.getElementById('sizeTitle').textContent = p.size_name || 'Size/Type Goal';
+      document.getElementById('sizeTargetInfo').textContent = `Target: ${p.size_target_value ?? 0}`;
+      document.getElementById('countSize').value = p.current_count_size || 0;
+
+      // D/T
+      document.getElementById('dtTitle').textContent = p.dt_name || 'D/T Goal';
+      document.getElementById('dtTargetInfo').textContent = `Target: ${p.dt_target_value ?? 0}`;
+      document.getElementById('countDt').value = p.current_count_dt || 0;
+
+      // Timing
+      document.getElementById('timingTitle').textContent = p.timing_name || 'Timing Goal';
+      document.getElementById('timingTargetInfo').textContent = `Target: ${p.timing_target_value ?? 0}`;
+      document.getElementById('countTiming').value = p.current_count_timing || 0;
+
+      // Attribute
+      document.getElementById('attrTitle').textContent = p.attr_name || 'Attribute Goal';
+      document.getElementById('attrTargetInfo').textContent = `Target: ${p.attr_target_value ?? 0}`;
+      document.getElementById('countAttr').value = p.current_count_attr || 0;
+
+      checkCompletion();
+    }
+
+     function openProjectGC() {
+      if (!currentParticipant || !currentParticipant.person_name) return;
+      const username = encodeURIComponent(currentParticipant.person_name);
+      const url = `https://project-gc.com/ProfileStats/${username}`;
+      // Adding dimensions forces a separate browser window instance
+      window.open(url, '_blank', 'width=1200,height=900,resizable=yes,scrollbars=yes');
+    }
+
+    function checkCompletion() {
+      if (!currentParticipant) return;
+
+      const sizeVal = parseInt(document.getElementById('countSize').value, 10) || 0;
+      const dtVal = parseInt(document.getElementById('countDt').value, 10) || 0;
+      const timingVal = parseInt(document.getElementById('countTiming').value, 10) || 0;
+      const attrVal = parseInt(document.getElementById('countAttr').value, 10) || 0;
+
+      toggleBoxState('boxSize', sizeVal, currentParticipant.size_target_value || 0);
+      toggleBoxState('boxDt', dtVal, currentParticipant.dt_target_value || 0);
+      toggleBoxState('boxTiming', timingVal, currentParticipant.timing_target_value || 0);
+      toggleBoxState('boxAttr', attrVal, currentParticipant.attr_target_value || 0);
+    }
+
+    function toggleBoxState(boxId, current, target) {
+      const box = document.getElementById(boxId);
+      if (current >= target && target > 0) {
+        box.classList.add('completed');
+      } else {
+        box.classList.remove('completed');
+      }
+    }
+
+    async function saveAndNext() {
+      if (!currentParticipant) return;
+      const statusEl = document.getElementById('statusMsg');
+
+      const sizeCount = parseInt(document.getElementById('countSize').value, 10) || 0;
+      const dtCount = parseInt(document.getElementById('countDt').value, 10) || 0;
+      const timingCount = parseInt(document.getElementById('countTiming').value, 10) || 0;
+      const attrCount = parseInt(document.getElementById('countAttr').value, 10) || 0;
+      const currentFinds = parseInt(document.getElementById('countCurrentFind').value, 10) || 0;
+      const labFinds = parseInt(document.getElementById('countLabFind').value, 10) || 0;
+
+      statusEl.className = 'status-msg';
+      statusEl.textContent = 'Saving progress...';
+
+      const { error } = await db
+        .from('challenge_entries')
+        .update({
+          current_count_size: sizeCount,
+          current_count_dt: dtCount,
+          current_count_timing: timingCount,
+          current_count_attr: attrCount,
+          current_find_count: currentFinds,
+          lab_find_count: labFinds,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', currentParticipant.id);
+
+      if (error) {
+        console.error('Update failed:', error);
+        statusEl.className = 'status-msg status-error';
+        statusEl.textContent = 'Failed to save: ' + error.message;
+      } else {
+        statusEl.className = 'status-msg status-success';
+        statusEl.textContent = 'Saved successfully! Loading next...';
+        
+        pendingQueue.shift();
+        setTimeout(updateQueueDisplay, 300);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadQueue);
+  </script>
+</body>
+</html>
