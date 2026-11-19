@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Geocoin Challenge - Progress Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --border-color: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --success: #22c55e;
+    }
+
+    body { font-family: system-ui, sans-serif; max-width: 1200px; margin: 0 auto; padding: 14px; background: var(--bg-color); color: var(--text-main); box-sizing: border-box; font-size: 16px; }
+    h2 { text-align: center; color: var(--accent); font-size: 1.6rem; margin: 10px 0 15px 0; }
+    .status-bar { text-align: center; margin-bottom: 15px; font-size: 0.9rem; color: var(--text-muted); }
+    .live-dot { height: 10px; width: 10px; background-color: var(--success); border-radius: 50%; display: inline-block; margin-right: 6px; box-shadow: 0 0 8px var(--success); }
+    
+    /* Summary Header Panels */
+    .summary-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 15px; }
+    .summary-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    .summary-card h3 { font-size: 1rem; color: var(--accent); margin-top: 0; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+    .summary-list { list-style: none; padding: 0; margin: 0; font-size: 0.95rem; }
+    .summary-list li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed rgba(51, 65, 85, 0.5); }
+    .summary-list li:last-child { border-bottom: none; }
+    .stat-value { font-weight: bold; color: var(--text-main); }
+
+    /* Search & Filter Bar */
+    .filter-bar { display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px; background: var(--card-bg); padding: 14px; border-radius: 10px; border: 1px solid var(--border-color); }
+    .filter-bar input[type="text"] { background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); padding: 12px 14px; border-radius: 8px; font-size: 1rem; width: 100%; box-sizing: border-box; outline: none; }
+    .filter-bar input[type="text"]:focus { border-color: var(--accent); }
+    
+    .filter-btn-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
+    .filter-btn { background: var(--bg-color); color: var(--text-muted); border: 1px solid var(--border-color); padding: 12px 8px; border-radius: 8px; font-weight: 600; font-size: 0.85rem; text-align: center; cursor: pointer; transition: all 0.2s; }
+    .filter-btn.active { background: #0284c7; color: white; border-color: #0284c7; }
+
+    /* Participant Cards */
+    .participant-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    .participant-card.is-complete { border-color: var(--success); background: linear-gradient(135deg, var(--card-bg) 0%, rgba(34, 197, 94, 0.08) 100%); }
+
+    .card-header { display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 12px; }
+    .header-top { display: flex; justify-content: space-between; align-items: center; }
+    .participant-name { font-size: 1.25rem; font-weight: bold; color: var(--accent); }
+    .meta-info { font-size: 0.85rem; color: var(--text-muted); }
+    
+    /* Badge styles */
+    .badge { font-size: 0.75rem; font-weight: bold; padding: 5px 10px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+    .badge.pending { background: var(--border-color); color: var(--text-muted); }
+    .badge.complete { background: var(--success); color: #0f172a; box-shadow: 0 0 8px rgba(34, 197, 94, 0.4); }
+
+    /* Goals Grid */
+    .goals-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    .goal-box { background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; }
+    .goal-title { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between; text-transform: uppercase; }
+    .goal-name { color: var(--text-main); font-weight: 600; font-size: 0.95rem; margin-bottom: 6px; }
+    .goal-stats { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between; gap: 4px; flex-wrap: wrap; }
+    
+    .progress-bar-container { background: var(--border-color); border-radius: 4px; height: 8px; overflow: hidden; width: 100%; }
+    .progress-bar { background: var(--accent); height: 100%; width: 0%; transition: width 0.4s ease; }
+    
+    .goal-box.completed { border-color: var(--success); background: rgba(34, 197, 94, 0.05); }
+    .goal-box.completed .progress-bar { background: var(--success); }
+    .goal-box.completed .goal-name { color: #4ade80; }
+
+    .no-data { text-align: center; padding: 40px; color: var(--text-muted); font-size: 1rem; }
+
+    /* Tablet and Desktop Scaling */
+    @media (min-width: 640px) {
+      body { padding: 25px; }
+      h2 { font-size: 2rem; }
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+      .filter-bar { flex-direction: row; justify-content: space-between; align-items: center; }
+      .filter-bar input[type="text"] { width: 260px; }
+      .filter-btn-group { width: auto; display: flex; gap: 10px; }
+      .filter-btn { padding: 10px 16px; font-size: 0.9rem; }
+      .goals-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    }
+
+    @media (min-width: 1024px) {
+      .goals-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Annual Geocoin Challenge</h2>
+  <div class="status-bar">
+    <span class="live-dot"></span> Live synchronization active
+  </div>
+
+  <!-- Header Summary Panels -->
+  <div class="summary-grid" id="summaryGrid">
+    <div class="summary-card">
+      <h3>Challenge Overview</h3>
+      <ul class="summary-list" id="overviewStats">
+        <li><span>Loading overview...</span></li>
+      </ul>
+    </div>
+    <div class="summary-card">
+      <h3>Geocoin / Year Breakdown</h3>
+      <ul class="summary-list" id="coinStats">
+        <li><span>Loading coin data...</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Search & Filter Bar -->
+  <div class="filter-bar">
+    <input type="text" id="searchInput" placeholder="Search participant name..." oninput="applyFilterAndRender()">
+    <div class="filter-btn-group">
+      <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+      <button class="filter-btn" onclick="setFilter('completed', this)">Complete</button>
+      <button class="filter-btn" onclick="setFilter('inprogress', this)">Active</button>
+    </div>
+  </div>
+
+  <div id="dashboardContainer">
+    <div class="no-data">Loading progress dashboard...</div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jnhchkwndzpsteisjsia.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaGNoa3duZHpwc3RlaXNqc2lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0ODEwOTksImV4cCI6MjEwOTA1NzA5OX0.wQYC256oD0JYEQXsTCWvr8q_8TBcO0EYvcGDMLlFaJc';
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let cachedParticipants = [];
+    let currentFilter = 'all';
+
+    async function fetchProgress() {
+      const { data, error } = await db
+        .from('v_live_scoreboard')
+        .select('*')
+        .order('person_name', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching progress:', error);
+        return;
+      }
+
+      cachedParticipants = data || [];
+      processHeaderSummary(cachedParticipants);
+      applyFilterAndRender();
+    }
+
+    function processHeaderSummary(allParticipants) {
+      const overviewStats = document.getElementById('overviewStats');
+      const coinStats = document.getElementById('coinStats');
+
+      const activeParticipants = allParticipants.filter(p => p.p3_completed === true);
+      let totalParticipants = activeParticipants.length;
+      let totalCompleted = 0;
+      let countByYear = {};
+      let completedByYear = {};
+
+      activeParticipants.forEach(p => {
+        const year = p.target_year || 'Unknown';
+        countByYear[year] = (countByYear[year] || 0) + 1;
+
+        if (p.is_complete === true) {
+          totalCompleted++;
+          completedByYear[year] = (completedByYear[year] || 0) + 1;
+        }
+      });
+
+      let overviewHtml = `<li><span>Active Participants:</span> <span class="stat-value">${totalParticipants}</span></li>`;
+      overviewHtml += `<li><span>Total Completed (3+):</span> <span class="stat-value" style="color: #4ade80;">${totalCompleted}</span></li>`;
+      
+      Object.keys(countByYear).sort().forEach(yr => {
+        overviewHtml += `<li><span>&bull; Year ${yr}:</span> <span class="stat-value">${countByYear[yr]}</span></li>`;
+      });
+      overviewStats.innerHTML = overviewHtml;
+
+      let coinHtml = '';
+      const sortedYears = Object.keys(countByYear).sort();
+      if (sortedYears.length === 0) {
+        coinHtml = `<li><span>No geocoins assigned yet.</span></li>`;
+      } else {
+        sortedYears.forEach(yr => {
+          const attempting = countByYear[yr];
+          const completed = completedByYear[yr] || 0;
+          coinHtml += `<li><span>Year ${yr} Coin:</span> <span class="stat-value">${completed} / ${attempting}</span></li>`;
+        });
+      }
+      coinStats.innerHTML = coinHtml;
+    }
+
+    function setFilter(filterType, btnElement) {
+      currentFilter = filterType;
+      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+      btnElement.classList.add('active');
+      applyFilterAndRender();
+    }
+
+    function applyFilterAndRender() {
+      let participants = cachedParticipants.filter(p => p.p3_completed === true);
+
+      if (currentFilter === 'completed') {
+        participants = participants.filter(p => p.is_complete === true);
+      } else if (currentFilter === 'inprogress') {
+        participants = participants.filter(p => p.is_complete !== true);
+      }
+
+      const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
+      if (searchTerm) {
+        participants = participants.filter(p => 
+          (p.person_name || '').toLowerCase().includes(searchTerm)
+        );
+      }
+
+      renderDashboard(participants);
+    }
+
+    function renderDashboard(participants) {
+      const container = document.getElementById('dashboardContainer');
+      container.innerHTML = '';
+
+      if (participants.length === 0) {
+        container.innerHTML = `<div class="no-data">No participants found matching your criteria.</div>`;
+        return;
+      }
+
+      participants.forEach(p => {
+        const goals = [
+          { label: 'Size/Type', name: p.size_name, current: p.current_count_size || 0, target: p.size_target_value || 0, start: p.start_count_size || 0 },
+          { label: 'D/T Goal', name: p.dt_name, current: p.current_count_dt || 0, target: p.dt_target_value || 0, start: p.start_count_dt || 0 },
+          { label: 'Timing Goal', name: p.timing_name, current: p.current_count_timing || 0, target: p.timing_target_value || 0, start: p.start_count_timing || 0 },
+          { label: 'Attribute Goal', name: p.attr_name, current: p.current_count_attr || 0, target: p.attr_target_value || 0, start: p.start_count_attr || 0 }
+        ];
+
+        const card = document.createElement('div');
+        card.className = `participant-card ${p.is_complete ? 'is-complete' : ''}`;
+
+        let lastUpdatedText = 'Never updated';
+        if (p.updated_at) {
+          const dateObj = new Date(p.updated_at);
+          lastUpdatedText = `Updated: ${dateObj.toLocaleDateString()} ${dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        }
+
+        let goalsHtml = '';
+        goals.forEach(g => {
+          const netProgress = Math.max(0, g.current - g.start);
+          const netTarget = Math.max(1, g.target - g.start);
+          const pct = Math.min(100, Math.round((netProgress / netTarget) * 100));
+          const isCompleted = g.current >= g.target && g.target > 0;
+
+          goalsHtml += `
+            <div class="goal-box ${isCompleted ? 'completed' : ''}">
+              <div class="goal-title">
+                <span>${g.label}</span>
+                <span>${isCompleted ? '✓ Done' : `${pct}%`}</span>
+              </div>
+              <div class="goal-name">${escapeHtml(g.name || 'N/A')}</div>
+              <div class="goal-stats">
+                <span>Start: ${g.start}</span>
+                <span>Cur: ${g.current}</span>
+                <span>Tgt: ${Math.round(g.target)}</span>
+              </div>
+              <div class="progress-bar-container">
+                <div class="progress-bar" style="width: ${pct}%;"></div>
+              </div>
+            </div>
+          `;
+        });
+
+        card.innerHTML = `
+          <div class="card-header">
+            <div class="header-top">
+              <span class="participant-name">${escapeHtml(p.person_name)}</span>
+              <span class="badge ${p.is_complete ? 'complete' : 'pending'}">${p.is_complete ? `✓ Complete (${p.goals_completed_count}/4)` : `${p.goals_completed_count}/4 Goals`}</span>
+            </div>
+            <div class="header-top">
+              <span class="meta-info">(${p.target_year}) &bull; Mult: ${p.is_red_ball ? '10x (Red Ball)' : p.effective_multiplier + 'x'}</span>
+              <span class="meta-info">${lastUpdatedText}</span>
+            </div>
+          </div>
+
+          <div class="goals-grid">
+            ${goalsHtml}
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    db.channel('public:challenge_entries_progress')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'challenge_entries' }, () => {
+        fetchProgress();
+      })
+      .subscribe();
+
+    fetchProgress();
+  </script>
+</body>
+</html>
