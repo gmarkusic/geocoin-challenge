@@ -298,8 +298,10 @@
         document.getElementById('startTiming').value = '';
         clearGoalDescriptions();
 
-        loadEntries();
+        await loadEntries();
 
+        // Set focus to Size/Type starting count for the next participant
+        document.getElementById('startSize').focus();
       }
     });
 
