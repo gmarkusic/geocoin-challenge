@@ -9,10 +9,10 @@
     body { font-family: system-ui, sans-serif; max-width: 900px; margin: 30px auto; padding: 0 20px; background: #0f172a; color: #f8fafc; }
     h2 { text-align: center; color: #38bdf8; margin-bottom: 20px; }
     .card { background: #1e293b; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #334155; }
-    .queue-info { text-align: center; font-size: 0.9rem; color: #94a3b8; margin-bottom: 20px; }
+    .queue-info { text-align: center; font-size: 0.9rem; color: #94a3b8; margin-bottom: 16px; }
     label { display: block; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 6px; }
-    input { width: 100%; padding: 10px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; font-size: 1rem; box-sizing: border-box; }
-    input:focus { outline: none; border-color: #38bdf8; }
+    input, select { width: 100%; padding: 10px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; font-size: 1rem; box-sizing: border-box; }
+    input:focus, select:focus { outline: none; border-color: #38bdf8; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
     .category-box { background: #0f172a; padding: 15px; border-radius: 6px; border: 1px solid #334155; transition: border-color 0.2s, background-color 0.2s; }
     .category-box.completed { background: rgba(34, 197, 94, 0.1); border-color: #22c55e; }
@@ -21,7 +21,15 @@
     .target-info { font-size: 0.8rem; color: #94a3b8; margin-bottom: 10px; }
     button { width: 100%; background: #0284c7; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; font-size: 1rem; cursor: pointer; transition: background 0.2s; margin-top: 20px; }
     button:hover { background: #0369a1; }
-    
+
+    /* Search Bar Styles */
+    .search-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #334155; flex-wrap: wrap; }
+    .search-bar input { flex: 1; min-width: 200px; font-size: 0.9rem; padding: 8px 12px; }
+    .search-btn { background: #334155; color: #38bdf8; border: 1px solid #38bdf8; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.2s; width: auto; margin-top: 0; white-space: nowrap; }
+    .search-btn:hover { background: #38bdf8; color: #0f172a; }
+    .reset-search-btn { background: transparent; color: #94a3b8; border: 1px solid #475569; padding: 8px 12px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.2s; width: auto; margin-top: 0; white-space: nowrap; display: none; }
+    .reset-search-btn:hover { background: #334155; color: #f8fafc; }
+
     /* Project-GC Button Styling */
     .secondary-btn { background: #334155; color: #f8fafc; border: 1px solid #475569; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.2s; width: auto; margin-top: 0; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
     .secondary-btn:hover { background: #475569; }
@@ -42,6 +50,21 @@
 
   <div class="card">
     <div class="queue-info" id="queueInfo">Loading queue status...</div>
+
+    <!-- Optional Participant Search by Name -->
+    <div class="search-bar">
+      <input
+        type="text"
+        id="participantSearch"
+        list="participantNameList"
+        placeholder="Search participant by name..."
+        autocomplete="off"
+        onkeydown="if(event.key==='Enter'){ event.preventDefault(); searchParticipantByName(); }"
+      >
+      <datalist id="participantNameList"></datalist>
+      <button type="button" class="search-btn" onclick="searchParticipantByName()">Find Participant 🔎</button>
+      <button type="button" class="reset-search-btn" id="resetSearchBtn" onclick="clearParticipantSearch()">Back to Queue</button>
+    </div>
 
     <!-- Dynamic Entry Form -->
     <div id="entryForm" style="display: none;">
@@ -124,8 +147,10 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaGNoa3duZHpwc3RlaXNqc2lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0ODEwOTksImV4cCI6MjEwOTA1NzA5OX0.wQYC256oD0JYEQXsTCWvr8q_8TBcO0EYvcGDMLlFaJc';
     const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    let allParticipantsCache = [];
     let pendingQueue = [];
     let currentParticipant = null;
+    let isSearchMode = false;
 
     async function loadQueue() {
       const todayStr = new Date().toISOString().split('T')[0];
@@ -141,7 +166,10 @@
         return;
       }
 
-      pendingQueue = (data || []).filter(p => {
+      allParticipantsCache = data || [];
+      populateSearchDatalist(allParticipantsCache);
+
+      pendingQueue = allParticipantsCache.filter(p => {
         const lastUpdatedDate = p.updated_at ? p.updated_at.split('T')[0] : null;
         const needsUpdateToday = lastUpdatedDate !== todayStr;
 
@@ -155,6 +183,62 @@
         return needsUpdateToday && !allGoalsCompleted;
       });
 
+      if (!isSearchMode) {
+        updateQueueDisplay();
+      }
+    }
+
+    function populateSearchDatalist(participants) {
+      const datalist = document.getElementById('participantNameList');
+      datalist.innerHTML = '';
+
+      const uniqueNames = [...new Set(participants.map(p => p.person_name).filter(Boolean))];
+      uniqueNames.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        datalist.appendChild(opt);
+      });
+    }
+
+    function searchParticipantByName() {
+      const query = document.getElementById('participantSearch').value.trim().toLowerCase();
+      const queueInfo = document.getElementById('queueInfo');
+      const entryForm = document.getElementById('entryForm');
+      const emptyMsg = document.getElementById('emptyQueueMsg');
+      const resetBtn = document.getElementById('resetSearchBtn');
+
+      if (!query) {
+        clearParticipantSearch();
+        return;
+      }
+
+      const match =
+        allParticipantsCache.find(p => (p.person_name || '').toLowerCase() === query) ||
+        allParticipantsCache.find(p => (p.person_name || '').toLowerCase().includes(query));
+
+      if (!match) {
+        queueInfo.textContent = `No participant found matching "${document.getElementById('participantSearch').value.trim()}".`;
+        return;
+      }
+
+      isSearchMode = true;
+      resetBtn.style.display = 'inline-block';
+      emptyMsg.style.display = 'none';
+      entryForm.style.display = 'block';
+      queueInfo.textContent = `Viewing searched participant: ${match.person_name}`;
+
+      currentParticipant = match;
+      populateForm(currentParticipant);
+
+      const findInput = document.getElementById('countCurrentFind');
+      findInput.focus();
+      findInput.select();
+    }
+
+    function clearParticipantSearch() {
+      isSearchMode = false;
+      document.getElementById('participantSearch').value = '';
+      document.getElementById('resetSearchBtn').style.display = 'none';
       updateQueueDisplay();
     }
 
@@ -215,7 +299,7 @@
       checkCompletion();
     }
 
-     function openProjectGC() {
+    function openProjectGC() {
       if (!currentParticipant || !currentParticipant.person_name) return;
       const username = encodeURIComponent(currentParticipant.person_name);
       const url = `https://project-gc.com/ProfileStats/${username}`;
@@ -279,10 +363,29 @@
         statusEl.textContent = 'Failed to save: ' + error.message;
       } else {
         statusEl.className = 'status-msg status-success';
-        statusEl.textContent = 'Saved successfully! Loading next...';
-        
-        pendingQueue.shift();
-        setTimeout(updateQueueDisplay, 300);
+
+        if (isSearchMode) {
+          statusEl.textContent = 'Saved successfully!';
+          pendingQueue = pendingQueue.filter(p => p.id !== currentParticipant.id);
+          allParticipantsCache = allParticipantsCache.map(p =>
+            p.id === currentParticipant.id
+              ? {
+                  ...p,
+                  current_count_size: sizeCount,
+                  current_count_dt: dtCount,
+                  current_count_timing: timingCount,
+                  current_count_attr: attrCount,
+                  current_find_count: currentFinds,
+                  lab_find_count: labFinds,
+                  updated_at: new Date().toISOString()
+                }
+              : p
+          );
+        } else {
+          statusEl.textContent = 'Saved successfully! Loading next...';
+          pendingQueue.shift();
+          setTimeout(updateQueueDisplay, 300);
+        }
       }
     }
 
