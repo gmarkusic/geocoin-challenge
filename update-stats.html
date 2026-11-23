@@ -23,8 +23,19 @@
     button:hover { background: #0369a1; }
 
     /* Search Bar Styles */
-    .search-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #334155; flex-wrap: wrap; }
-    .search-bar input { flex: 1; min-width: 200px; font-size: 0.9rem; padding: 8px 12px; }
+    .search-bar {
+      display: flex !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #334155;
+      flex-wrap: wrap;
+    }
+    .search-bar input { flex: 1; min-width: 180px; font-size: 0.9rem; padding: 8px 12px; }
+    .search-bar select { flex: 1; min-width: 180px; font-size: 0.9rem; padding: 8px 12px; }
     .search-btn { background: #334155; color: #38bdf8; border: 1px solid #38bdf8; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.2s; width: auto; margin-top: 0; white-space: nowrap; }
     .search-btn:hover { background: #38bdf8; color: #0f172a; }
     .reset-search-btn { background: transparent; color: #94a3b8; border: 1px solid #475569; padding: 8px 12px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.2s; width: auto; margin-top: 0; white-space: nowrap; display: none; }
@@ -51,18 +62,20 @@
   <div class="card">
     <div class="queue-info" id="queueInfo">Loading queue status...</div>
 
-    <!-- Optional Participant Search by Name -->
-    <div class="search-bar">
+    <!-- Search Participant by Name or Dropdown -->
+    <div id="participantSearchBar" class="search-bar">
       <input
         type="text"
         id="participantSearch"
-        list="participantNameList"
-        placeholder="Search participant by name..."
+        placeholder="Filter or type participant name..."
         autocomplete="off"
-        onkeydown="if(event.key==='Enter'){ event.preventDefault(); searchParticipantByName(); }"
+        oninput="filterParticipantDropdown()"
+        onkeydown="if(event.key==='Enter'){ event.preventDefault(); selectSearchedParticipant(); }"
       >
-      <datalist id="participantNameList"></datalist>
-      <button type="button" class="search-btn" onclick="searchParticipantByName()">Find Participant 🔎</button>
+      <select id="participantSelect" onchange="selectSearchedParticipant()">
+        <option value="">-- Jump to participant --</option>
+      </select>
+      <button type="button" class="search-btn" onclick="selectSearchedParticipant()">Load</button>
       <button type="button" class="reset-search-btn" id="resetSearchBtn" onclick="clearParticipantSearch()">Back to Queue</button>
     </div>
 
@@ -152,6 +165,15 @@
     let currentParticipant = null;
     let isSearchMode = false;
 
+    function countCompletedGoals(p) {
+      const sizeDone = (p.size_target_value || 0) > 0 && (p.current_count_size || 0) >= (p.size_target_value || 0);
+      const dtDone = (p.dt_target_value || 0) > 0 && (p.current_count_dt || 0) >= (p.dt_target_value || 0);
+      const timingDone = (p.timing_target_value || 0) > 0 && (p.current_count_timing || 0) >= (p.timing_target_value || 0);
+      const attrDone = (p.attr_target_value || 0) > 0 && (p.current_count_attr || 0) >= (p.attr_target_value || 0);
+
+      return [sizeDone, dtDone, timingDone, attrDone].filter(Boolean).length;
+    }
+
     async function loadQueue() {
       const todayStr = new Date().toISOString().split('T')[0];
 
@@ -167,20 +189,16 @@
       }
 
       allParticipantsCache = data || [];
-      populateSearchDatalist(allParticipantsCache);
+      filterParticipantDropdown();
 
       pendingQueue = allParticipantsCache.filter(p => {
         const lastUpdatedDate = p.updated_at ? p.updated_at.split('T')[0] : null;
         const needsUpdateToday = lastUpdatedDate !== todayStr;
 
-        const sizeDone = (p.current_count_size || 0) >= (p.size_target_value || 0);
-        const dtDone = (p.current_count_dt || 0) >= (p.dt_target_value || 0);
-        const timingDone = (p.current_count_timing || 0) >= (p.timing_target_value || 0);
-        const attrDone = (p.current_count_attr || 0) >= (p.attr_target_value || 0);
+        // Exclude anyone who has already completed 3 or more of their 4 goals
+        const challengeCompleted = countCompletedGoals(p) >= 3;
 
-        const allGoalsCompleted = sizeDone && dtDone && timingDone && attrDone;
-
-        return needsUpdateToday && !allGoalsCompleted;
+        return needsUpdateToday && !challengeCompleted;
       });
 
       if (!isSearchMode) {
@@ -188,44 +206,58 @@
       }
     }
 
-    function populateSearchDatalist(participants) {
-      const datalist = document.getElementById('participantNameList');
-      datalist.innerHTML = '';
+    function filterParticipantDropdown() {
+      const query = document.getElementById('participantSearch').value.trim().toLowerCase();
+      const select = document.getElementById('participantSelect');
+      const previousVal = select.value;
 
-      const uniqueNames = [...new Set(participants.map(p => p.person_name).filter(Boolean))];
-      uniqueNames.forEach(name => {
+      const filtered = query
+        ? allParticipantsCache.filter(p => (p.person_name || '').toLowerCase().includes(query))
+        : allParticipantsCache;
+
+      select.innerHTML = '<option value="">-- Jump to participant (' + filtered.length + ') --</option>';
+
+      filtered.forEach(p => {
         const opt = document.createElement('option');
-        opt.value = name;
-        datalist.appendChild(opt);
+        opt.value = p.id;
+        opt.textContent = `${p.person_name} (${p.target_year})`;
+        select.appendChild(opt);
       });
+
+      if (previousVal && filtered.some(p => String(p.id) === String(previousVal))) {
+        select.value = previousVal;
+      }
     }
 
-    function searchParticipantByName() {
+    function selectSearchedParticipant() {
+      const select = document.getElementById('participantSelect');
       const query = document.getElementById('participantSearch').value.trim().toLowerCase();
       const queueInfo = document.getElementById('queueInfo');
       const entryForm = document.getElementById('entryForm');
       const emptyMsg = document.getElementById('emptyQueueMsg');
       const resetBtn = document.getElementById('resetSearchBtn');
 
-      if (!query) {
-        clearParticipantSearch();
-        return;
-      }
+      let match = null;
 
-      const match =
-        allParticipantsCache.find(p => (p.person_name || '').toLowerCase() === query) ||
-        allParticipantsCache.find(p => (p.person_name || '').toLowerCase().includes(query));
+      if (select.value) {
+        match = allParticipantsCache.find(p => String(p.id) === String(select.value));
+      } else if (query) {
+        match =
+          allParticipantsCache.find(p => (p.person_name || '').toLowerCase() === query) ||
+          allParticipantsCache.find(p => (p.person_name || '').toLowerCase().includes(query));
+      }
 
       if (!match) {
-        queueInfo.textContent = `No participant found matching "${document.getElementById('participantSearch').value.trim()}".`;
+        queueInfo.textContent = 'Select a participant from the dropdown or enter a matching name.';
         return;
       }
 
+      select.value = match.id;
       isSearchMode = true;
       resetBtn.style.display = 'inline-block';
       emptyMsg.style.display = 'none';
       entryForm.style.display = 'block';
-      queueInfo.textContent = `Viewing searched participant: ${match.person_name}`;
+      queueInfo.textContent = `Viewing participant: ${match.person_name}`;
 
       currentParticipant = match;
       populateForm(currentParticipant);
@@ -238,7 +270,9 @@
     function clearParticipantSearch() {
       isSearchMode = false;
       document.getElementById('participantSearch').value = '';
+      document.getElementById('participantSelect').value = '';
       document.getElementById('resetSearchBtn').style.display = 'none';
+      filterParticipantDropdown();
       updateQueueDisplay();
     }
 
