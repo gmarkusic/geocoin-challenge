@@ -19,6 +19,16 @@
     .cat-title { font-weight: bold; color: #38bdf8; font-size: 0.95rem; margin-bottom: 4px; }
     .category-box.completed .cat-title { color: #4ade80; }
     .target-info { font-size: 0.8rem; color: #94a3b8; margin-bottom: 10px; }
+
+    /* Attribute header with icon preview */
+    .attr-header-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .attr-header-text { flex: 1; min-width: 0; }
+    .attr-header-text .cat-title,
+    .attr-header-text .target-info { margin-bottom: 2px; }
+    .attr-icon-box { width: 42px; height: 42px; background: #1e293b; border: 1px dashed #334155; border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+    .attr-icon-box img { width: 100%; height: 100%; object-fit: contain; display: none; }
+    .attr-icon-box span { font-size: 0.6rem; color: #64748b; text-align: center; padding: 2px; }
+
     button { width: 100%; background: #0284c7; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; font-size: 1rem; cursor: pointer; transition: background 0.2s; margin-top: 20px; }
     button:hover { background: #0369a1; }
 
@@ -154,8 +164,16 @@
 
         <!-- Attribute Entry -->
         <div class="category-box" id="boxAttr">
-          <div class="cat-title" id="attrTitle">Attribute Goal</div>
-          <div class="target-info" id="attrTargetInfo">--</div>
+          <div class="attr-header-row">
+            <div class="attr-header-text">
+              <div class="cat-title" id="attrTitle">Attribute Goal</div>
+              <div class="target-info" id="attrTargetInfo">--</div>
+            </div>
+            <div class="attr-icon-box" id="attrIconBox">
+              <img id="attrIconImg" src="" alt="Attribute Icon">
+              <span id="attrIconPlaceholder">No Image</span>
+            </div>
+          </div>
           <label for="countAttr">Current Progress Count</label>
           <input type="number" id="countAttr" min="0" placeholder="0" oninput="checkCompletion()">
         </div>
@@ -179,6 +197,78 @@
     let pendingQueue = [];
     let currentParticipant = null;
     let isSearchMode = false;
+    let attrIconById = new Map();
+    let attrIconByName = new Map();
+
+    function resolveAttributeIconUrl(rawUrl) {
+      if (!rawUrl) return '';
+      const trimmed = String(rawUrl).trim();
+      if (!trimmed) return '';
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        return trimmed;
+      }
+      const { data: publicUrlData } = db.storage.from('attributes').getPublicUrl(trimmed);
+      return publicUrlData?.publicUrl || trimmed;
+    }
+
+    async function loadAttributeIcons() {
+      const { data, error } = await db
+        .from('ref_attributes')
+        .select('id, item_name, image_url');
+
+      if (error) {
+        console.warn('Error loading ref_attributes icons:', error);
+        return;
+      }
+
+      attrIconById = new Map();
+      attrIconByName = new Map();
+
+      (data || []).forEach(row => {
+        const resolvedUrl = resolveAttributeIconUrl(row.image_url);
+        if (!resolvedUrl) return;
+        if (row.id != null) {
+          attrIconById.set(String(row.id), resolvedUrl);
+        }
+        if (row.item_name) {
+          attrIconByName.set(String(row.item_name).trim().toLowerCase(), resolvedUrl);
+        }
+      });
+    }
+
+    function updateAttributeIcon(p) {
+      const imgElem = document.getElementById('attrIconImg');
+      const placeholderElem = document.getElementById('attrIconPlaceholder');
+
+      if (!p) {
+        imgElem.style.display = 'none';
+        imgElem.src = '';
+        placeholderElem.style.display = 'block';
+        return;
+      }
+
+      const byView = p.image_url ? resolveAttributeIconUrl(p.image_url) : '';
+      const byId = p.attribute_goal_id != null ? attrIconById.get(String(p.attribute_goal_id)) : '';
+      const byName = p.attr_name ? attrIconByName.get(String(p.attr_name).trim().toLowerCase()) : '';
+      const finalUrl = String(byView || byId || byName || '').trim();
+
+      if (!finalUrl) {
+        imgElem.style.display = 'none';
+        imgElem.src = '';
+        placeholderElem.style.display = 'block';
+        return;
+      }
+
+      imgElem.onerror = () => {
+        console.warn('Failed to load image from ref_attributes at:', finalUrl);
+        imgElem.style.display = 'none';
+        placeholderElem.style.display = 'block';
+      };
+
+      imgElem.src = finalUrl;
+      imgElem.style.display = 'block';
+      placeholderElem.style.display = 'none';
+    }
 
     function countCompletedGoals(p) {
       const sizeDone = (p.size_target_value || 0) > 0 && (p.current_count_size || 0) >= (p.size_target_value || 0);
@@ -190,6 +280,7 @@
     }
 
     async function loadQueue() {
+      await loadAttributeIcons();
       const todayStr = new Date().toISOString().split('T')[0];
 
       const { data, error } = await db
@@ -303,6 +394,7 @@
         entryForm.style.display = 'none';
         emptyMsg.style.display = 'block';
         currentParticipant = null;
+        updateAttributeIcon(null);
         return;
       }
 
@@ -346,6 +438,7 @@
       document.getElementById('attrTitle').textContent = p.attr_name || 'Attribute Goal';
       document.getElementById('attrTargetInfo').textContent = `Target: ${p.attr_target_value ?? 0}`;
       document.getElementById('countAttr').value = p.current_count_attr || 0;
+      updateAttributeIcon(p);
 
       checkCompletion();
     }
