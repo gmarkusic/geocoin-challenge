@@ -243,6 +243,82 @@
       attr: ''
     };
 
+    const MONTH_INDEX = {
+      jan: 1, january: 1,
+      feb: 2, february: 2,
+      mar: 3, march: 3,
+      apr: 4, april: 4,
+      may: 5,
+      jun: 6, june: 6,
+      jul: 7, july: 7,
+      aug: 8, august: 8,
+      sep: 9, sept: 9, september: 9,
+      oct: 10, october: 10,
+      nov: 11, november: 11,
+      dec: 12, december: 12
+    };
+
+    function getChronologicalSortKey(rawLabel) {
+      const text = String(rawLabel || '').trim();
+      if (!text) return null;
+
+      // ISO date: YYYY-MM-DD
+      const isoMatch = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+      if (isoMatch) {
+        const year = Number(isoMatch[1]);
+        const month = Number(isoMatch[2]);
+        const day = Number(isoMatch[3]);
+        return year * 10000 + month * 100 + day;
+      }
+
+      // Month + Day (e.g., "July 4", "Jul 4th", "4 July")
+      const lower = text.toLowerCase().replace(/,/g, ' ');
+      const monthDayMatch = lower.match(/\b([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?\b/) ||
+                            lower.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]+)\b/);
+      if (monthDayMatch) {
+        const tokenA = monthDayMatch[1];
+        const tokenB = monthDayMatch[2];
+        const monthNum = MONTH_INDEX[tokenA] || MONTH_INDEX[tokenB];
+        const dayNum = Number(/^\d+$/.test(tokenA) ? tokenA : tokenB);
+        if (monthNum && dayNum >= 1 && dayNum <= 31) {
+          return monthNum * 100 + dayNum;
+        }
+      }
+
+      // Standalone Month name (e.g., "January", "Feb", "October")
+      const standaloneMonth = MONTH_INDEX[lower];
+      if (standaloneMonth) {
+        return standaloneMonth * 100;
+      }
+
+      // Numeric month/day slash or dash (e.g., "07/04", "7-4", "12/25/2026")
+      const slashMatch = text.match(/^(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?$/);
+      if (slashMatch) {
+        const p1 = Number(slashMatch[1]);
+        const p2 = Number(slashMatch[2]);
+        const p3 = slashMatch[3] ? Number(slashMatch[3].length === 2 ? `20${slashMatch[3]}` : slashMatch[3]) : 0;
+        if (p1 >= 1 && p1 <= 12 && p2 >= 1 && p2 <= 31) {
+          return p3 * 10000 + p1 * 100 + p2;
+        }
+      }
+
+      return null;
+    }
+
+    function compareGoalValues(a, b, key) {
+      if (key === 'timing') {
+        const keyA = getChronologicalSortKey(a);
+        const keyB = getChronologicalSortKey(b);
+        if (keyA !== null && keyB !== null) {
+          return keyA - keyB || a.localeCompare(b, undefined, { sensitivity: 'base' });
+        }
+        if (keyA !== null) return -1;
+        if (keyB !== null) return 1;
+      }
+
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    }
+
     function resolveAttributeImageUrl(rawUrl) {
       if (!rawUrl) return '';
       const trimmed = String(rawUrl).trim();
@@ -315,7 +391,7 @@
               .map(p => (p[cfg.field] || '').trim())
               .filter(val => val.length > 0)
           )
-        ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        ).sort((a, b) => compareGoalValues(a, b, cfg.key));
 
         const currentVal = selectedGoals[cfg.key];
         const validCurrentVal = uniqueValues.includes(currentVal) ? currentVal : '';
