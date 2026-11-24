@@ -43,8 +43,12 @@
 
     /* Search & Filter Bar */
     .filter-bar { display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px; background: var(--card-bg); padding: 14px; border-radius: 10px; border: 1px solid var(--border-color); }
-    .filter-bar input[type="text"] { background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); padding: 12px 14px; border-radius: 8px; font-size: 1rem; width: 100%; box-sizing: border-box; outline: none; }
+    .search-input-wrap { position: relative; width: 100%; display: flex; align-items: center; }
+    .filter-bar input[type="text"] { background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); padding: 12px 38px 12px 14px; border-radius: 8px; font-size: 1rem; width: 100%; box-sizing: border-box; outline: none; }
     .filter-bar input[type="text"]:focus { border-color: var(--accent); }
+    .clear-search-btn { position: absolute; right: 10px; background: transparent; border: none; color: var(--text-muted); font-size: 1.15rem; line-height: 1; width: 24px; height: 24px; border-radius: 50%; display: none; align-items: center; justify-content: center; cursor: pointer; padding: 0; transition: color 0.15s, background-color 0.15s; }
+    .clear-search-btn:hover { color: var(--text-main); background: rgba(148, 163, 184, 0.18); }
+    .clear-search-btn.visible { display: inline-flex; }
     
     .filter-btn-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
     .filter-btn { background: var(--bg-color); color: var(--text-muted); border: 1px solid var(--border-color); padding: 12px 8px; border-radius: 8px; font-weight: 600; font-size: 0.85rem; text-align: center; cursor: pointer; transition: all 0.2s; }
@@ -89,7 +93,7 @@
       body { padding: 25px; }
       h2 { font-size: 2rem; }
       .filter-bar { flex-direction: row; justify-content: space-between; align-items: center; }
-      .filter-bar input[type="text"] { width: 260px; }
+      .search-input-wrap { width: 260px; }
       .filter-btn-group { width: auto; display: flex; gap: 10px; }
       .filter-btn { padding: 10px 16px; font-size: 0.9rem; }
       .goals-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
@@ -123,7 +127,23 @@
 
   <!-- Search & Filter Bar -->
   <div class="filter-bar">
-    <input type="text" id="searchInput" placeholder="Search participant name..." oninput="applyFilterAndRender()">
+    <div class="search-input-wrap">
+      <input
+        type="text"
+        id="searchInput"
+        placeholder="Search participant name..."
+        oninput="handleSearchInput()"
+        onkeydown="if (event.key === 'Escape') { clearSearchInput(); }"
+      >
+      <button
+        type="button"
+        class="clear-search-btn"
+        id="clearSearchBtn"
+        aria-label="Clear participant search"
+        title="Clear search"
+        onclick="clearSearchInput()"
+      >&times;</button>
+    </div>
     <div class="filter-btn-group">
       <button class="filter-btn " onclick="setFilter('all', this)">All</button>
       <button class="filter-btn" onclick="setFilter('completed', this)">Complete</button>
@@ -208,6 +228,27 @@
       selectedYear = null;
       renderTopYearCoinBreakdown(cachedParticipants, cachedCoinInventory);
       applyFilterAndRender();
+    }
+
+    function syncClearSearchButton() {
+      const input = document.getElementById('searchInput');
+      const clearBtn = document.getElementById('clearSearchBtn');
+      if (!input || !clearBtn) return;
+      clearBtn.classList.toggle('visible', input.value.length > 0);
+    }
+
+    function handleSearchInput() {
+      syncClearSearchButton();
+      applyFilterAndRender();
+    }
+
+    function clearSearchInput() {
+      const input = document.getElementById('searchInput');
+      if (!input) return;
+      input.value = '';
+      syncClearSearchButton();
+      applyFilterAndRender();
+      input.focus();
     }
 
     function renderTopYearCoinBreakdown(allParticipants, coinRows) {
@@ -302,6 +343,7 @@
     }
 
     function applyFilterAndRender() {
+      syncClearSearchButton();
       let participants = cachedParticipants.filter(p => p.p3_completed === true);
 
       if (selectedYear) {
