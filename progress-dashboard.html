@@ -173,7 +173,7 @@
           if (attr.id != null) {
             attributeIconById.set(String(attr.id), attr.image_url);
           }
-          const label = attr.attribute_name || attr.name || attr.label || attr.title;
+          const label = attr.attribute_name || attr.name || attr.attribute || attr.label || attr.title;
           if (label) {
             attributeIconByName.set(String(label).trim().toLowerCase(), attr.image_url);
           }
@@ -319,28 +319,13 @@
       const byName = attrName ? attributeIconByName.get(String(attrName).trim().toLowerCase()) : null;
       const iconUrl = String(byView || byId || byName || '').trim();
 
-      const fallbackSvg = `
-        <span class="attr-icon-fallback" title="${escapeHtml(attrName || 'Attribute Goal')}">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-            <line x1="7" y1="7" x2="7.01" y2="7"></line>
-          </svg>
-        </span>
-      `;
+      const fallbackSvg = `<span class="attr-icon-fallback" title="${escapeHtml(attrName || 'Attribute Goal')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></span>`;
 
       if (!iconUrl) {
         return fallbackSvg;
       }
 
-      return `
-        <img
-          class="attr-icon-img"
-          src="${escapeHtml(iconUrl)}"
-          alt="${escapeHtml(attrName || 'Attribute icon')}"
-          title="${escapeHtml(attrName || 'Attribute Goal')}"
-          onerror="this.outerHTML = this.nextElementSibling.outerHTML;"
-        ><span class="attr-icon-fallback" style="display:none;" title="${escapeHtml(attrName || 'Attribute Goal')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></span>
-      `;
+      return `<img class="attr-icon-img" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(attrName || 'Attribute icon')}" title="${escapeHtml(attrName || 'Attribute Goal')}" onerror="console.warn('Failed to load attribute icon:', this.src); this.replaceWith(Object.assign(document.createElement('span'), { className: 'attr-icon-fallback', innerHTML: '<svg width=\\'16\\' height=\\'16\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2.2\\'><path d=\\'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z\\'></path><line x1=\\'7\\' y1=\\'7\\' x2=\\'7.01\\' y2=\\'7\\'></line></svg>' }));">`;
     }
 
     function renderDashboard(participants) {
