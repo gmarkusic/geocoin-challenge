@@ -68,7 +68,10 @@
     .goals-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
     .goal-box { background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; }
     .goal-title { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between; text-transform: uppercase; }
-    .goal-name { color: var(--text-main); font-weight: 600; font-size: 0.95rem; margin-bottom: 6px; }
+    .goal-name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .goal-name { color: var(--text-main); font-weight: 600; font-size: 0.95rem; }
+    .attr-icon-img { width: 24px; height: 24px; object-fit: contain; border-radius: 4px; flex-shrink: 0; }
+    .attr-icon-fallback { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
     .goal-stats { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between; gap: 4px; flex-wrap: wrap; }
     
     .progress-bar-container { background: var(--border-color); border-radius: 4px; height: 8px; overflow: hidden; width: 100%; }
@@ -77,6 +80,7 @@
     .goal-box.completed { border-color: var(--success); background: rgba(34, 197, 94, 0.05); }
     .goal-box.completed .progress-bar { background: var(--success); }
     .goal-box.completed .goal-name { color: #4ade80; }
+    .goal-box.completed .attr-icon-fallback { color: #4ade80; }
 
     .no-data { text-align: center; padding: 40px; color: var(--text-muted); font-size: 1rem; }
 
@@ -138,13 +142,16 @@
 
     let cachedParticipants = [];
     let cachedCoinInventory = [];
+    let attributeIconById = new Map();
+    let attributeIconByName = new Map();
     let currentFilter = 'all';
     let selectedYear = null;
 
     async function fetchProgress() {
-      const [scoreboardRes, coinsRes] = await Promise.all([
+      const [scoreboardRes, coinsRes, attrsRes] = await Promise.all([
         db.from('v_live_scoreboard').select('*').order('person_name', { ascending: true }),
-        db.from('coin_inventory').select('target_year, total_available').order('target_year', { ascending: true })
+        db.from('coin_inventory').select('target_year, total_available').order('target_year', { ascending: true }),
+        db.from('ref_attributes').select('*')
       ]);
 
       if (scoreboardRes.error) {
@@ -154,6 +161,23 @@
 
       if (coinsRes.error) {
         console.error('Error fetching coin_inventory:', coinsRes.error);
+      }
+
+      if (attrsRes.error) {
+        console.error('Error fetching ref_attributes:', attrsRes.error);
+      } else {
+        attributeIconById = new Map();
+        attributeIconByName = new Map();
+        (attrsRes.data || []).forEach(attr => {
+          if (!attr.image_url) return;
+          if (attr.id != null) {
+            attributeIconById.set(String(attr.id), attr.image_url);
+          }
+          const label = attr.attribute_name || attr.name || attr.label || attr.title;
+          if (label) {
+            attributeIconByName.set(String(label).trim().toLowerCase(), attr.image_url);
+          }
+        });
       }
 
       cachedParticipants = scoreboardRes.data || [];
@@ -289,6 +313,36 @@
       renderDashboard(participants);
     }
 
+    function getAttributeIconHtml(p, attrName) {
+      const byView = p.image_url || p.attr_image_url;
+      const byId = p.attribute_goal_id != null ? attributeIconById.get(String(p.attribute_goal_id)) : null;
+      const byName = attrName ? attributeIconByName.get(String(attrName).trim().toLowerCase()) : null;
+      const iconUrl = String(byView || byId || byName || '').trim();
+
+      const fallbackSvg = `
+        <span class="attr-icon-fallback" title="${escapeHtml(attrName || 'Attribute Goal')}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+            <line x1="7" y1="7" x2="7.01" y2="7"></line>
+          </svg>
+        </span>
+      `;
+
+      if (!iconUrl) {
+        return fallbackSvg;
+      }
+
+      return `
+        <img
+          class="attr-icon-img"
+          src="${escapeHtml(iconUrl)}"
+          alt="${escapeHtml(attrName || 'Attribute icon')}"
+          title="${escapeHtml(attrName || 'Attribute Goal')}"
+          onerror="this.outerHTML = this.nextElementSibling.outerHTML;"
+        ><span class="attr-icon-fallback" style="display:none;" title="${escapeHtml(attrName || 'Attribute Goal')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></span>
+      `;
+    }
+
     function renderDashboard(participants) {
       const container = document.getElementById('dashboardContainer');
       container.innerHTML = '';
@@ -300,10 +354,10 @@
 
       participants.forEach(p => {
         const goals = [
-          { label: 'Size/Type', name: p.size_name, current: p.current_count_size || 0, target: p.size_target_value || 0, start: p.start_count_size || 0 },
-          { label: 'D/T Goal', name: p.dt_name, current: p.current_count_dt || 0, target: p.dt_target_value || 0, start: p.start_count_dt || 0 },
-          { label: 'Timing Goal', name: p.timing_name, current: p.current_count_timing || 0, target: p.timing_target_value || 0, start: p.start_count_timing || 0 },
-          { label: 'Attribute Goal', name: p.attr_name, current: p.current_count_attr || 0, target: p.attr_target_value || 0, start: p.start_count_attr || 0 }
+          { label: 'Size/Type', name: p.size_name, current: p.current_count_size || 0, target: p.size_target_value || 0, start: p.start_count_size || 0, isAttribute: false },
+          { label: 'D/T Goal', name: p.dt_name, current: p.current_count_dt || 0, target: p.dt_target_value || 0, start: p.start_count_dt || 0, isAttribute: false },
+          { label: 'Timing Goal', name: p.timing_name, current: p.current_count_timing || 0, target: p.timing_target_value || 0, start: p.start_count_timing || 0, isAttribute: false },
+          { label: 'Attribute Goal', name: p.attr_name, current: p.current_count_attr || 0, target: p.attr_target_value || 0, start: p.start_count_attr || 0, isAttribute: true }
         ];
 
         const card = document.createElement('div');
@@ -321,6 +375,7 @@
           const netTarget = Math.max(1, g.target - g.start);
           const pct = Math.min(100, Math.round((netProgress / netTarget) * 100));
           const isCompleted = g.current >= g.target && g.target > 0;
+          const iconHtml = g.isAttribute ? getAttributeIconHtml(p, g.name) : '';
 
           goalsHtml += `
             <div class="goal-box ${isCompleted ? 'completed' : ''}">
@@ -328,7 +383,10 @@
                 <span>${g.label}</span>
                 <span>${isCompleted ? '✓ Done' : `${pct}%`}</span>
               </div>
-              <div class="goal-name">${escapeHtml(g.name || 'N/A')}</div>
+              <div class="goal-name-row">
+                ${iconHtml}
+                <span class="goal-name">${escapeHtml(g.name || 'N/A')}</span>
+              </div>
               <div class="goal-stats">
                 <span>Start: ${g.start}</span>
                 <span>Cur: ${g.current}</span>
