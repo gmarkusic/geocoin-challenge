@@ -70,8 +70,8 @@
     .goal-title { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between; text-transform: uppercase; }
     .goal-name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
     .goal-name { color: var(--text-main); font-weight: 600; font-size: 0.95rem; }
-    .attr-icon-img { width: 24px; height: 24px; object-fit: contain; border-radius: 4px; flex-shrink: 0; }
-    .attr-icon-fallback { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
+    .attr-icon-img { width: 26px; height: 26px; object-fit: contain; border-radius: 4px; flex-shrink: 0; }
+    .attr-icon-fallback { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
     .goal-stats { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between; gap: 4px; flex-wrap: wrap; }
     
     .progress-bar-container { background: var(--border-color); border-radius: 4px; height: 8px; overflow: hidden; width: 100%; }
@@ -147,11 +147,22 @@
     let currentFilter = 'all';
     let selectedYear = null;
 
+    function resolveAttributeImageUrl(rawUrl) {
+      if (!rawUrl) return '';
+      const trimmed = String(rawUrl).trim();
+      if (!trimmed) return '';
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        return trimmed;
+      }
+      const { data: publicUrlData } = db.storage.from('attributes').getPublicUrl(trimmed);
+      return publicUrlData?.publicUrl || trimmed;
+    }
+
     async function fetchProgress() {
       const [scoreboardRes, coinsRes, attrsRes] = await Promise.all([
         db.from('v_live_scoreboard').select('*').order('person_name', { ascending: true }),
         db.from('coin_inventory').select('target_year, total_available').order('target_year', { ascending: true }),
-        db.from('ref_attributes').select('*')
+        db.from('ref_attributes').select('id, item_name, image_url')
       ]);
 
       if (scoreboardRes.error) {
@@ -169,13 +180,13 @@
         attributeIconById = new Map();
         attributeIconByName = new Map();
         (attrsRes.data || []).forEach(attr => {
-          if (!attr.image_url) return;
+          const resolvedUrl = resolveAttributeImageUrl(attr.image_url);
+          if (!resolvedUrl) return;
           if (attr.id != null) {
-            attributeIconById.set(String(attr.id), attr.image_url);
+            attributeIconById.set(String(attr.id), resolvedUrl);
           }
-          const label = attr.attribute_name || attr.name || attr.attribute || attr.label || attr.title;
-          if (label) {
-            attributeIconByName.set(String(label).trim().toLowerCase(), attr.image_url);
+          if (attr.item_name) {
+            attributeIconByName.set(String(attr.item_name).trim().toLowerCase(), resolvedUrl);
           }
         });
       }
@@ -314,7 +325,7 @@
     }
 
     function getAttributeIconHtml(p, attrName) {
-      const byView = p.image_url || p.attr_image_url;
+      const byView = p.image_url ? resolveAttributeImageUrl(p.image_url) : '';
       const byId = p.attribute_goal_id != null ? attributeIconById.get(String(p.attribute_goal_id)) : null;
       const byName = attrName ? attributeIconByName.get(String(attrName).trim().toLowerCase()) : null;
       const iconUrl = String(byView || byId || byName || '').trim();
@@ -325,7 +336,7 @@
         return fallbackSvg;
       }
 
-      return `<img class="attr-icon-img" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(attrName || 'Attribute icon')}" title="${escapeHtml(attrName || 'Attribute Goal')}" onerror="console.warn('Failed to load attribute icon:', this.src); this.replaceWith(Object.assign(document.createElement('span'), { className: 'attr-icon-fallback', innerHTML: '<svg width=\\'16\\' height=\\'16\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2.2\\'><path d=\\'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z\\'></path><line x1=\\'7\\' y1=\\'7\\' x2=\\'7.01\\' y2=\\'7\\'></line></svg>' }));">`;
+      return `<img class="attr-icon-img" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(attrName || 'Attribute icon')}" title="${escapeHtml(attrName || 'Attribute Goal')}" onerror="console.warn('Failed to load image from ref_attributes at:', this.src); this.replaceWith(Object.assign(document.createElement('span'), { className: 'attr-icon-fallback', innerHTML: '<svg width=\\'16\\' height=\\'16\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2.2\\'><path d=\\'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z\\'></path><line x1=\\'7\\' y1=\\'7\\' x2=\\'7.01\\' y2=\\'7\\'></line></svg>' }));">`;
     }
 
     function renderDashboard(participants) {
