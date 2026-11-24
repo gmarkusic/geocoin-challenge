@@ -64,10 +64,29 @@
     .goal-filter-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
     .goal-filter-item { display: flex; flex-direction: column; gap: 5px; }
     .goal-filter-item label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-    .goal-filter-item select { background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px 12px; border-radius: 8px; font-size: 0.9rem; outline: none; cursor: pointer; }
-    .goal-filter-item select:focus,
-    .goal-filter-item select.active-goal-select { border-color: var(--accent); }
-    .goal-filter-item select.active-goal-select { background: rgba(56, 189, 248, 0.08); }
+    .goal-filter-item select {
+      color-scheme: dark;
+      background-color: var(--bg-color);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      outline: none;
+      cursor: pointer;
+    }
+    .goal-filter-item select option {
+      background-color: #0f172a;
+      color: #f8fafc;
+    }
+    .goal-filter-item select:focus {
+      border-color: var(--accent);
+    }
+    .goal-filter-item select.active-goal-select {
+      border-color: var(--accent);
+      background-color: #102a43;
+      color: var(--text-main);
+    }
 
     /* Participant Cards */
     .participant-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
