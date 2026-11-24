@@ -39,6 +39,7 @@
     .coin-avail-pill.low { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border-color: rgba(245, 158, 11, 0.4); }
     .year-metric-row { display: flex; justify-content: space-between; font-size: 0.9rem; color: var(--text-muted); margin-top: 4px; }
     .year-metric-row strong { color: var(--text-main); }
+    .year-metric-row strong.finished-count { color: #4ade80; }
 
     /* Summary Header Panels */
     .summary-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 15px; }
@@ -211,7 +212,7 @@
       (coinRows || []).forEach(row => {
         if (row.target_year == null) return;
         const yr = String(row.target_year);
-        const entry = yearStats.get(yr) || { year: yr, participants: 0, availableCoins: 0 };
+        const entry = yearStats.get(yr) || { year: yr, participants: 0, finished: 0, availableCoins: 0 };
         entry.availableCoins += Number(row.total_available) || 0;
         yearStats.set(yr, entry);
       });
@@ -219,8 +220,11 @@
       (allParticipants || []).forEach(p => {
         if (p.target_year == null) return;
         const yr = String(p.target_year);
-        const entry = yearStats.get(yr) || { year: yr, participants: 0, availableCoins: 0 };
+        const entry = yearStats.get(yr) || { year: yr, participants: 0, finished: 0, availableCoins: 0 };
         entry.participants += 1;
+        if (p.is_complete === true) {
+          entry.finished += 1;
+        }
         yearStats.set(yr, entry);
       });
 
@@ -241,10 +245,12 @@
       }
 
       let grandParticipants = 0;
+      let grandFinished = 0;
       let grandCoins = 0;
 
       gridEl.innerHTML = sortedYears.map(item => {
         grandParticipants += item.participants;
+        grandFinished += item.finished;
         grandCoins += item.availableCoins;
 
         let pillClass = 'coin-avail-pill';
@@ -265,6 +271,10 @@
               <strong>${item.participants}</strong>
             </div>
             <div class="year-metric-row">
+              <span>Participants Finished</span>
+              <strong class="finished-count">${item.finished}</strong>
+            </div>
+            <div class="year-metric-row">
               <span>Coins Available</span>
               <strong>${item.availableCoins}</strong>
             </div>
@@ -273,7 +283,7 @@
       }).join('');
 
       const filterSuffix = selectedYear ? ` • Filtered: ${selectedYear}` : '';
-      totalsEl.textContent = `Total: ${grandParticipants} participant(s) • ${grandCoins} coin(s) available${filterSuffix}`;
+      totalsEl.textContent = `Total: ${grandParticipants} participant(s) • ${grandFinished} finished • ${grandCoins} coin(s) available${filterSuffix}`;
     }
 
     function processHeaderSummary(allParticipants) {
