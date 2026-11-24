@@ -297,7 +297,7 @@
       });
 
       let overviewHtml = `<li><span>Active Participants:</span> <span class="stat-value">${totalParticipants}</span></li>`;
-      overviewHtml += `<li><span>Total Completed (3+):</span> <span class="stat-value" style="color: #4ade80;">${totalCompleted}</span></li>`;
+      overviewHtml += `<li><span>Total Completed:</span> <span class="stat-value" style="color: #4ade80;">${totalCompleted}</span></li>`;
       
       Object.keys(countByYear).sort().forEach(yr => {
         overviewHtml += `<li><span>&bull; Year ${yr}:</span> <span class="stat-value">${countByYear[yr]}</span></li>`;
