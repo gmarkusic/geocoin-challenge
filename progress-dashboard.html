@@ -20,7 +20,22 @@
     h2 { text-align: center; color: var(--accent); font-size: 1.6rem; margin: 10px 0 15px 0; }
     .status-bar { text-align: center; margin-bottom: 15px; font-size: 0.9rem; color: var(--text-muted); }
     .live-dot { height: 10px; width: 10px; background-color: var(--success); border-radius: 50%; display: inline-block; margin-right: 6px; box-shadow: 0 0 8px var(--success); }
-    
+
+    /* Top Breakdown Section: Participants & Available Coins by Year */
+    .top-year-breakdown { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    .top-breakdown-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 12px; }
+    .top-breakdown-header h3 { margin: 0; font-size: 1rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; }
+    .top-breakdown-totals { font-size: 0.85rem; color: var(--text-muted); }
+    .year-breakdown-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .year-breakdown-item { background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; }
+    .year-item-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .year-badge { font-weight: 700; font-size: 1.05rem; color: var(--text-main); }
+    .coin-avail-pill { font-size: 0.78rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.35); }
+    .coin-avail-pill.low { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border-color: rgba(245, 158, 11, 0.4); }
+    .coin-avail-pill.none { background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.4); }
+    .year-metric-row { display: flex; justify-content: space-between; font-size: 0.9rem; color: var(--text-muted); margin-top: 4px; }
+    .year-metric-row strong { color: var(--text-main); }
+
     /* Summary Header Panels */
     .summary-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 15px; }
     .summary-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
@@ -93,6 +108,17 @@
     <span class="live-dot"></span> Live synchronization active
   </div>
 
+  <!-- Top Breakdown: Participants by Year & Available Coins -->
+  <section class="top-year-breakdown" id="yearCoinBreakdown">
+    <div class="top-breakdown-header">
+      <h3>Participants &amp; Available Coins by Year</h3>
+      <span class="top-breakdown-totals" id="yearCoinTotals">Loading year breakdown...</span>
+    </div>
+    <div class="year-breakdown-grid" id="yearCoinGrid">
+      <div class="year-breakdown-item">Loading inventory and participant counts...</div>
+    </div>
+  </section>
+
   <!-- Header Summary Panels -->
   <div class="summary-grid" id="summaryGrid">
     <div class="summary-card">
@@ -129,22 +155,95 @@
     const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let cachedParticipants = [];
+    let cachedCoinInventory = [];
     let currentFilter = 'all';
 
     async function fetchProgress() {
-      const { data, error } = await db
-        .from('v_live_scoreboard')
-        .select('*')
-        .order('person_name', { ascending: true });
+      const [scoreboardRes, coinsRes] = await Promise.all([
+        db.from('v_live_scoreboard').select('*').order('person_name', { ascending: true }),
+        db.from('coin_inventory').select('target_year, total_available').order('target_year', { ascending: true })
+      ]);
 
-      if (error) {
-        console.error('Error fetching progress:', error);
+      if (scoreboardRes.error) {
+        console.error('Error fetching progress:', scoreboardRes.error);
         return;
       }
 
-      cachedParticipants = data || [];
+      if (coinsRes.error) {
+        console.error('Error fetching coin_inventory:', coinsRes.error);
+      }
+
+      cachedParticipants = scoreboardRes.data || [];
+      cachedCoinInventory = coinsRes.data || [];
+
+      renderTopYearCoinBreakdown(cachedParticipants, cachedCoinInventory);
       processHeaderSummary(cachedParticipants);
       applyFilterAndRender();
+    }
+
+    function renderTopYearCoinBreakdown(allParticipants, coinRows) {
+      const gridEl = document.getElementById('yearCoinGrid');
+      const totalsEl = document.getElementById('yearCoinTotals');
+
+      const yearStats = new Map();
+
+      (coinRows || []).forEach(row => {
+        if (row.target_year == null) return;
+        const yr = String(row.target_year);
+        const entry = yearStats.get(yr) || { year: yr, participants: 0, availableCoins: 0 };
+        entry.availableCoins += Number(row.total_available) || 0;
+        yearStats.set(yr, entry);
+      });
+
+      (allParticipants || []).forEach(p => {
+        if (p.target_year == null) return;
+        const yr = String(p.target_year);
+        const entry = yearStats.get(yr) || { year: yr, participants: 0, availableCoins: 0 };
+        entry.participants += 1;
+        yearStats.set(yr, entry);
+      });
+
+      const sortedYears = Array.from(yearStats.values()).sort((a, b) => Number(a.year) - Number(b.year));
+
+      if (sortedYears.length === 0) {
+        gridEl.innerHTML = '<div class="year-breakdown-item">No year or coin data available.</div>';
+        totalsEl.textContent = '0 participants • 0 coins available';
+        return;
+      }
+
+      let grandParticipants = 0;
+      let grandCoins = 0;
+
+      gridEl.innerHTML = sortedYears.map(item => {
+        grandParticipants += item.participants;
+        grandCoins += item.availableCoins;
+
+        let pillClass = 'coin-avail-pill';
+        if (item.availableCoins <= 0) {
+          pillClass += ' none';
+        } else if (item.availableCoins <= 5) {
+          pillClass += ' low';
+        }
+
+        return `
+          <div class="year-breakdown-item">
+            <div class="year-item-head">
+              <span class="year-badge">${escapeHtml(item.year)}</span>
+              <span class="${pillClass}">${item.availableCoins} Available</span>
+            </div>
+            <div class="year-metric-row">
+              <span>Participants</span>
+              <strong>${item.participants}</strong>
+            </div>
+            <div class="year-metric-row">
+              <span>Coins Available</span>
+              <strong>${item.availableCoins}</strong>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      totalsEl.textContent = `Total: ${grandParticipants} participant(s) • ${grandCoins} coin(s) available`;
     }
 
     function processHeaderSummary(allParticipants) {
@@ -295,6 +394,9 @@
 
     db.channel('public:challenge_entries_progress')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'challenge_entries' }, () => {
+        fetchProgress();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'coin_inventory' }, () => {
         fetchProgress();
       })
       .subscribe();
