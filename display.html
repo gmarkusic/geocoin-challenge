@@ -15,7 +15,10 @@
     .status-bar { text-align: center; margin-bottom: 15px; font-size: 0.85rem; color: #94a3b8; }
     .live-dot { height: 10px; width: 10px; background-color: #22c55e; border-radius: 50%; display: inline-block; margin-right: 6px; box-shadow: 0 0 8px #22c55e; }
     .red-ball { color: #ef4444; font-weight: bold; }
+    .attr-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+    .attr-icon-img { width: 24px; height: 24px; object-fit: contain; border-radius: 4px; flex-shrink: 0; }
     .cat-title { font-weight: bold; color: #38bdf8; margin-bottom: 3px; }
+    .attr-title-row .cat-title { margin-bottom: 0; }
     .cat-metrics { color: #94a3b8; font-size: 0.8rem; }
     
     /* Variance Badge Styles */
@@ -72,11 +75,63 @@
     const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const tableBody = document.getElementById('scoreboardBody');
 
-    async function fetchScoreboard() {
+    let attrIconById = new Map();
+    let attrIconByName = new Map();
+
+    function resolveAttributeIconUrl(rawUrl) {
+      if (!rawUrl) return '';
+      const trimmed = String(rawUrl).trim();
+      if (!trimmed) return '';
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        return trimmed;
+      }
+      const { data: publicUrlData } = db.storage.from('attributes').getPublicUrl(trimmed);
+      return publicUrlData?.publicUrl || trimmed;
+    }
+
+    async function loadAttributeIcons() {
       const { data, error } = await db
-        .from('v_live_scoreboard')
-        .select('*')
-        .order('id', { ascending: false });
+        .from('ref_attributes')
+        .select('id, item_name, image_url');
+
+      if (error) {
+        console.warn('Error loading ref_attributes icons:', error);
+        return;
+      }
+
+      attrIconById = new Map();
+      attrIconByName = new Map();
+
+      (data || []).forEach(row => {
+        const resolvedUrl = resolveAttributeIconUrl(row.image_url);
+        if (!resolvedUrl) return;
+        if (row.id != null) {
+          attrIconById.set(String(row.id), resolvedUrl);
+        }
+        if (row.item_name) {
+          attrIconByName.set(String(row.item_name).trim().toLowerCase(), resolvedUrl);
+        }
+      });
+    }
+
+    function getAttributeIconHtml(row) {
+      const byView = row.image_url ? resolveAttributeIconUrl(row.image_url) : '';
+      const byId = row.attribute_goal_id != null ? attrIconById.get(String(row.attribute_goal_id)) : '';
+      const byName = row.attr_name ? attrIconByName.get(String(row.attr_name).trim().toLowerCase()) : '';
+      const finalUrl = String(byView || byId || byName || '').trim();
+
+      if (!finalUrl) return '';
+
+      return `<img class="attr-icon-img" src="${escapeHtml(finalUrl)}" alt="${escapeHtml(row.attr_name || 'Attribute Icon')}" title="${escapeHtml(row.attr_name || 'Attribute Goal')}" onerror="console.warn('Failed to load image from ref_attributes at:', this.src); this.style.display='none';">`;
+    }
+
+    async function fetchScoreboard() {
+      const [, scoreboardRes] = await Promise.all([
+        loadAttributeIcons(),
+        db.from('v_live_scoreboard').select('*').order('id', { ascending: false })
+      ]);
+
+      const { data, error } = scoreboardRes;
 
       if (error) {
         console.error('Error fetching scorecard:', error);
@@ -119,11 +174,15 @@
         const sizeStart = row.size_target_value - row.size_qty_needed;
         const dtStart = row.dt_target_value - row.dt_qty_needed;
         const timingStart = row.timing_target_value - row.timing_qty_needed;
+        const attrIconHtml = getAttributeIconHtml(row);
 
         content += `
           <td>${row.is_red_ball ? '<span class="red-ball">RED BALL (10x)</span>' : row.effective_multiplier + 'x'}</td>
           <td>
-            <div class="cat-title">${escapeHtml(row.attr_name || 'N/A')}</div>
+            <div class="attr-title-row">
+              ${attrIconHtml}
+              <div class="cat-title">${escapeHtml(row.attr_name || 'N/A')}</div>
+            </div>
             <div class="cat-metrics">Start: ${attrStart} &bull; Needed: +${row.attr_qty_needed} &bull; <strong>Target: ${row.attr_target_value}</strong></div>
           </td>
           <td>
