@@ -93,7 +93,7 @@
     @media (min-width: 640px) {
       body { padding: 25px; }
       h2 { font-size: 2rem; }
-      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+      .summary-grid { grid-template-columns: 1fr; }
       .filter-bar { flex-direction: row; justify-content: space-between; align-items: center; }
       .filter-bar input[type="text"] { width: 260px; }
       .filter-btn-group { width: auto; display: flex; gap: 10px; }
@@ -133,12 +133,6 @@
       <h3>Challenge Overview</h3>
       <ul class="summary-list" id="overviewStats">
         <li><span>Loading overview...</span></li>
-      </ul>
-    </div>
-    <div class="summary-card">
-      <h3>Geocoin - Completed / Attempting</h3>
-      <ul class="summary-list" id="coinStats">
-        <li><span>Loading coin data...</span></li>
       </ul>
     </div>
   </div>
@@ -288,13 +282,11 @@
 
     function processHeaderSummary(allParticipants) {
       const overviewStats = document.getElementById('overviewStats');
-      const coinStats = document.getElementById('coinStats');
 
       const activeParticipants = allParticipants.filter(p => p.p3_completed === true);
       let totalParticipants = activeParticipants.length;
       let totalCompleted = 0;
       let countByYear = {};
-      let completedByYear = {};
 
       activeParticipants.forEach(p => {
         const year = p.target_year || 'Unknown';
@@ -302,7 +294,6 @@
 
         if (p.is_complete === true) {
           totalCompleted++;
-          completedByYear[year] = (completedByYear[year] || 0) + 1;
         }
       });
 
@@ -313,19 +304,6 @@
         overviewHtml += `<li><span>&bull; Year ${yr}:</span> <span class="stat-value">${countByYear[yr]}</span></li>`;
       });
       overviewStats.innerHTML = overviewHtml;
-
-      let coinHtml = '';
-      const sortedYears = Object.keys(countByYear).sort();
-      if (sortedYears.length === 0) {
-        coinHtml = `<li><span>No geocoins assigned yet.</span></li>`;
-      } else {
-        sortedYears.forEach(yr => {
-          const attempting = countByYear[yr];
-          const completed = completedByYear[yr] || 0;
-          coinHtml += `<li><span>Year ${yr} Coin:</span> <span class="stat-value">${completed} / ${attempting}</span></li>`;
-        });
-      }
-      coinStats.innerHTML = coinHtml;
     }
 
     function setFilter(filterType, btnElement) {
