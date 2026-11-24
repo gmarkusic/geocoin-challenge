@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attribute Image Audit</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --border-color: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --danger: #ef4444;
+      --success: #22c55e;
+    }
+
+    body { font-family: system-ui, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: var(--bg-color); color: var(--text-main); }
+    h2 { text-align: center; color: var(--accent); margin-bottom: 8px; }
+    .subtitle { text-align: center; color: var(--text-muted); font-size: 0.9rem; margin-bottom: 25px; }
+    
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+    .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    
+    .card img { width: 64px; height: 64px; object-fit: contain; background: #0f172a; border-radius: 6px; padding: 6px; margin-bottom: 12px; border: 1px solid var(--border-color); }
+    .card .no-image { width: 64px; height: 64px; background: rgba(239, 68, 68, 0.1); border: 1px dashed var(--danger); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: var(--danger); margin-bottom: 12px; text-align: center; padding: 4px; box-sizing: border-box; }
+    
+    .item-name { font-weight: 600; font-size: 0.95rem; margin-bottom: 6px; word-break: break-word; color: var(--text-main); }
+    .item-url { font-size: 0.75rem; color: var(--text-muted); word-break: break-all; max-width: 100%; overflow: hidden; text-overflow: ellipsis; background: rgba(15, 23, 42, 0.5); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); width: 100%; box-sizing: border-box; }
+    
+    .status-msg { text-align: center; padding: 40px; color: var(--text-muted); font-size: 1rem; grid-column: 1 / -1; }
+  </style>
+</head>
+<body>
+
+  <h2>Attribute Image Audit</h2>
+  <div class="subtitle">Inspecting all entries and image links in <code>ref_attributes</code></div>
+
+  <div id="gridContainer" class="grid">
+    <div class="status-msg">Loading attributes from database...</div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jnhchkwndzpsteisjsia.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaGNoa3duZHpwc3RlaXNqc2lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0ODEwOTksImV4cCI6MjEwOTA1NzA5OX0.wQYC256oD0JYEQXsTCWvr8q_8TBcO0EYvcGDMLlFaJc';
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function loadAttributes() {
+      const container = document.getElementById('gridContainer');
+      
+      const { data, error } = await db
+        .from('ref_attributes')
+        .select('item_name, image_url')
+        .order('item_name', { ascending: true });
+
+      if (error) {
+        container.innerHTML = `<div class="status-msg" style="color: var(--danger);">Error loading table: ${escapeHtml(error.message)}</div>`;
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        container.innerHTML = `<div class="status-msg">No records found in ref_attributes.</div>`;
+        return;
+      }
+
+      container.innerHTML = '';
+      
+      data.forEach(attr => {
+        const card = document.createElement('div');
+        card.className = 'card';
+
+        const hasUrl = attr.image_url && attr.image_url.trim() !== '';
+        
+        let imageHtml = '';
+        if (hasUrl) {
+          imageHtml = `<img src="${escapeHtml(attr.image_url)}" alt="${escapeHtml(attr.item_name)}" onerror="this.onerror=null; this.outerHTML='<div class=\\'no-image\\'>Load Failed</div>';">`;
+        } else {
+          imageHtml = `<div class="no-image">Missing URL</div>`;
+        }
+
+        card.innerHTML = `
+          ${imageHtml}
+          <div class="item-name">${escapeHtml(attr.item_name || 'Unnamed Attribute')}</div>
+          <div class="item-url">${escapeHtml(attr.image_url || 'No image_url provided')}</div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    loadAttributes();
+  </script>
+</body>
+</html>
