@@ -41,15 +41,6 @@
     .year-metric-row strong { color: var(--text-main); }
     .year-metric-row strong.finished-count { color: #4ade80; }
 
-    /* Summary Header Panels */
-    .summary-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 15px; }
-    .summary-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-    .summary-card h3 { font-size: 1rem; color: var(--accent); margin-top: 0; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
-    .summary-list { list-style: none; padding: 0; margin: 0; font-size: 0.95rem; }
-    .summary-list li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed rgba(51, 65, 85, 0.5); }
-    .summary-list li:last-child { border-bottom: none; }
-    .stat-value { font-weight: bold; color: var(--text-main); }
-
     /* Search & Filter Bar */
     .filter-bar { display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px; background: var(--card-bg); padding: 14px; border-radius: 10px; border: 1px solid var(--border-color); }
     .filter-bar input[type="text"] { background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); padding: 12px 14px; border-radius: 8px; font-size: 1rem; width: 100%; box-sizing: border-box; outline: none; }
@@ -93,7 +84,6 @@
     @media (min-width: 640px) {
       body { padding: 25px; }
       h2 { font-size: 2rem; }
-      .summary-grid { grid-template-columns: 1fr; }
       .filter-bar { flex-direction: row; justify-content: space-between; align-items: center; }
       .filter-bar input[type="text"] { width: 260px; }
       .filter-btn-group { width: auto; display: flex; gap: 10px; }
@@ -126,16 +116,6 @@
       <div class="year-breakdown-item">Loading inventory and participant counts...</div>
     </div>
   </section>
-
-  <!-- Header Summary Panels -->
-  <div class="summary-grid" id="summaryGrid">
-    <div class="summary-card">
-      <h3>Challenge Overview</h3>
-      <ul class="summary-list" id="overviewStats">
-        <li><span>Loading overview...</span></li>
-      </ul>
-    </div>
-  </div>
 
   <!-- Search & Filter Bar -->
   <div class="filter-bar">
@@ -180,7 +160,6 @@
       cachedCoinInventory = coinsRes.data || [];
 
       renderTopYearCoinBreakdown(cachedParticipants, cachedCoinInventory);
-      processHeaderSummary(cachedParticipants);
       applyFilterAndRender();
     }
 
@@ -278,32 +257,6 @@
 
       const filterSuffix = selectedYear ? ` • Filtered: ${selectedYear}` : '';
       totalsEl.textContent = `Total: ${grandParticipants} participant(s) • ${grandFinished} finished • ${grandCoins} coin(s) available${filterSuffix}`;
-    }
-
-    function processHeaderSummary(allParticipants) {
-      const overviewStats = document.getElementById('overviewStats');
-
-      const activeParticipants = allParticipants.filter(p => p.p3_completed === true);
-      let totalParticipants = activeParticipants.length;
-      let totalCompleted = 0;
-      let countByYear = {};
-
-      activeParticipants.forEach(p => {
-        const year = p.target_year || 'Unknown';
-        countByYear[year] = (countByYear[year] || 0) + 1;
-
-        if (p.is_complete === true) {
-          totalCompleted++;
-        }
-      });
-
-      let overviewHtml = `<li><span>Active Participants:</span> <span class="stat-value">${totalParticipants}</span></li>`;
-      overviewHtml += `<li><span>Total Completed:</span> <span class="stat-value" style="color: #4ade80;">${totalCompleted}</span></li>`;
-      
-      Object.keys(countByYear).sort().forEach(yr => {
-        overviewHtml += `<li><span>&bull; Year ${yr}:</span> <span class="stat-value">${countByYear[yr]}</span></li>`;
-      });
-      overviewStats.innerHTML = overviewHtml;
     }
 
     function setFilter(filterType, btnElement) {
