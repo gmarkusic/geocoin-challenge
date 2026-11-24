@@ -25,14 +25,18 @@
     .top-year-breakdown { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
     .top-breakdown-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 12px; }
     .top-breakdown-header h3 { margin: 0; font-size: 1rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; }
+    .top-breakdown-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .top-breakdown-totals { font-size: 0.85rem; color: var(--text-muted); }
+    .clear-year-btn { background: var(--bg-color); color: var(--accent); border: 1px solid var(--accent); border-radius: 6px; padding: 4px 10px; font-size: 0.78rem; font-weight: 600; cursor: pointer; display: none; }
+    .clear-year-btn:hover { background: var(--accent); color: var(--bg-color); }
     .year-breakdown-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-    .year-breakdown-item { background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; }
+    .year-breakdown-item { background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; cursor: pointer; transition: border-color 0.2s, transform 0.15s, background-color 0.2s; }
+    .year-breakdown-item:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .year-breakdown-item.selected { border-color: var(--accent); background: rgba(56, 189, 248, 0.1); box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.45); }
     .year-item-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
     .year-badge { font-weight: 700; font-size: 1.05rem; color: var(--text-main); }
     .coin-avail-pill { font-size: 0.78rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.35); }
     .coin-avail-pill.low { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border-color: rgba(245, 158, 11, 0.4); }
-    .coin-avail-pill.none { background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.4); }
     .year-metric-row { display: flex; justify-content: space-between; font-size: 0.9rem; color: var(--text-muted); margin-top: 4px; }
     .year-metric-row strong { color: var(--text-main); }
 
@@ -112,7 +116,10 @@
   <section class="top-year-breakdown" id="yearCoinBreakdown">
     <div class="top-breakdown-header">
       <h3>Participants &amp; Available Coins by Year</h3>
-      <span class="top-breakdown-totals" id="yearCoinTotals">Loading year breakdown...</span>
+      <div class="top-breakdown-meta">
+        <span class="top-breakdown-totals" id="yearCoinTotals">Loading year breakdown...</span>
+        <button type="button" class="clear-year-btn" id="clearYearBtn" onclick="clearYearFilter()">Show All Years</button>
+      </div>
     </div>
     <div class="year-breakdown-grid" id="yearCoinGrid">
       <div class="year-breakdown-item">Loading inventory and participant counts...</div>
@@ -157,6 +164,7 @@
     let cachedParticipants = [];
     let cachedCoinInventory = [];
     let currentFilter = 'all';
+    let selectedYear = null;
 
     async function fetchProgress() {
       const [scoreboardRes, coinsRes] = await Promise.all([
@@ -181,9 +189,22 @@
       applyFilterAndRender();
     }
 
+    function toggleYearFilter(yearStr) {
+      selectedYear = (selectedYear === yearStr) ? null : yearStr;
+      renderTopYearCoinBreakdown(cachedParticipants, cachedCoinInventory);
+      applyFilterAndRender();
+    }
+
+    function clearYearFilter() {
+      selectedYear = null;
+      renderTopYearCoinBreakdown(cachedParticipants, cachedCoinInventory);
+      applyFilterAndRender();
+    }
+
     function renderTopYearCoinBreakdown(allParticipants, coinRows) {
       const gridEl = document.getElementById('yearCoinGrid');
       const totalsEl = document.getElementById('yearCoinTotals');
+      const clearBtn = document.getElementById('clearYearBtn');
 
       const yearStats = new Map();
 
@@ -203,11 +224,19 @@
         yearStats.set(yr, entry);
       });
 
-      const sortedYears = Array.from(yearStats.values()).sort((a, b) => Number(a.year) - Number(b.year));
+      const sortedYears = Array.from(yearStats.values())
+        .filter(item => item.availableCoins > 0)
+        .sort((a, b) => Number(a.year) - Number(b.year));
+
+      if (selectedYear && !sortedYears.some(y => y.year === selectedYear)) {
+        selectedYear = null;
+      }
+
+      clearBtn.style.display = selectedYear ? 'inline-block' : 'none';
 
       if (sortedYears.length === 0) {
-        gridEl.innerHTML = '<div class="year-breakdown-item">No year or coin data available.</div>';
-        totalsEl.textContent = '0 participants • 0 coins available';
+        gridEl.innerHTML = '<div class="year-breakdown-item">No years with available coins found.</div>';
+        totalsEl.textContent = '0 coins available';
         return;
       }
 
@@ -219,14 +248,14 @@
         grandCoins += item.availableCoins;
 
         let pillClass = 'coin-avail-pill';
-        if (item.availableCoins <= 0) {
-          pillClass += ' none';
-        } else if (item.availableCoins <= 5) {
+        if (item.availableCoins <= 5) {
           pillClass += ' low';
         }
 
+        const isSelected = selectedYear === item.year;
+
         return `
-          <div class="year-breakdown-item">
+          <div class="year-breakdown-item ${isSelected ? 'selected' : ''}" onclick="toggleYearFilter('${escapeHtml(item.year)}')" title="Click to filter by ${escapeHtml(item.year)}">
             <div class="year-item-head">
               <span class="year-badge">${escapeHtml(item.year)}</span>
               <span class="${pillClass}">${item.availableCoins} Available</span>
@@ -243,7 +272,8 @@
         `;
       }).join('');
 
-      totalsEl.textContent = `Total: ${grandParticipants} participant(s) • ${grandCoins} coin(s) available`;
+      const filterSuffix = selectedYear ? ` • Filtered: ${selectedYear}` : '';
+      totalsEl.textContent = `Total: ${grandParticipants} participant(s) • ${grandCoins} coin(s) available${filterSuffix}`;
     }
 
     function processHeaderSummary(allParticipants) {
@@ -297,6 +327,10 @@
 
     function applyFilterAndRender() {
       let participants = cachedParticipants.filter(p => p.p3_completed === true);
+
+      if (selectedYear) {
+        participants = participants.filter(p => String(p.target_year) === selectedYear);
+      }
 
       if (currentFilter === 'completed') {
         participants = participants.filter(p => p.is_complete === true);
