@@ -444,7 +444,7 @@
               <span class="badge ${p.is_complete ? 'complete' : 'pending'}">${p.is_complete ? `✓ Complete (${p.goals_completed_count}/4)` : `${p.goals_completed_count}/4 Goals`}</span>
             </div>
             <div class="header-top">
-              <span class="meta-info">(${p.target_year}) &bull; Mult: ${p.is_red_ball ? '10x (Red Ball)' : p.effective_multiplier + 'x'}</span>
+              <span class="meta-info">(${p.target_year}) &bull; Difficulty Level: ${p.is_red_ball ? '10x (Red Ball)' : p.effective_multiplier}</span>
               <span class="meta-info">${lastUpdatedText}</span>
             </div>
           </div>
