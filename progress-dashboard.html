@@ -319,6 +319,12 @@
       return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
     }
 
+    function isGoalCompleted(currentVal, targetVal) {
+      const current = Number(currentVal) || 0;
+      const target = Number(targetVal) || 0;
+      return target > 0 && current >= target;
+    }
+
     function resolveAttributeImageUrl(rawUrl) {
       if (!rawUrl) return '';
       const trimmed = String(rawUrl).trim();
@@ -590,16 +596,28 @@
       }
 
       if (selectedGoals.size) {
-        participants = participants.filter(p => (p.size_name || '').trim() === selectedGoals.size);
+        participants = participants.filter(p =>
+          (p.size_name || '').trim() === selectedGoals.size &&
+          !isGoalCompleted(p.current_count_size, p.size_target_value)
+        );
       }
       if (selectedGoals.dt) {
-        participants = participants.filter(p => (p.dt_name || '').trim() === selectedGoals.dt);
+        participants = participants.filter(p =>
+          (p.dt_name || '').trim() === selectedGoals.dt &&
+          !isGoalCompleted(p.current_count_dt, p.dt_target_value)
+        );
       }
       if (selectedGoals.timing) {
-        participants = participants.filter(p => (p.timing_name || '').trim() === selectedGoals.timing);
+        participants = participants.filter(p =>
+          (p.timing_name || '').trim() === selectedGoals.timing &&
+          !isGoalCompleted(p.current_count_timing, p.timing_target_value)
+        );
       }
       if (selectedGoals.attr) {
-        participants = participants.filter(p => (p.attr_name || '').trim() === selectedGoals.attr);
+        participants = participants.filter(p =>
+          (p.attr_name || '').trim() === selectedGoals.attr &&
+          !isGoalCompleted(p.current_count_attr, p.attr_target_value)
+        );
       }
 
       const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
@@ -658,7 +676,7 @@
           const netProgress = Math.max(0, g.current - g.start);
           const netTarget = Math.max(1, g.target - g.start);
           const pct = Math.min(100, Math.round((netProgress / netTarget) * 100));
-          const isCompleted = g.current >= g.target && g.target > 0;
+          const isCompleted = isGoalCompleted(g.current, g.target);
           const iconHtml = g.isAttribute ? getAttributeIconHtml(p, g.name) : '';
 
           goalsHtml += `
